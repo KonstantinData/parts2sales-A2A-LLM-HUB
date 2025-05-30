@@ -1,65 +1,78 @@
 #!/usr/bin/env python3
 """
 File: prompt_quality_agent.py
-Type: Python Module (Agent Implementation)
+Type: Python Module (Agent Class)
 
 Purpose:
 --------
-This module implements the PromptQualityAgent, a rule-based agent that
-analyzes YAML prompts for clarity, structure, tone, grammar, idiomatic usage,
-and LLM-compatibility. It builds on top of a validation engine defined in
-`validate_prompt_en` and outputs structured results.
+This agent evaluates a YAML prompt against defined quality dimensions and produces a structured feedback log
+for downstream agents to consume. It uses a weighted scoring system based on predefined evaluation criteria.
 
-Usage:
-------
-Used within the prompt validation workflow to compute a quality score and
-detailed diagnostics before passing the prompt to improvement routines.
-
-Notes:
-------
-- Requires `language_tool_python`, `lang_en.py` and `validate_prompt_en`.
-- Outputs a structured dictionary with score and failed checks.
+Returns a feedback dictionary containing:
+- Weighted score (float)
+- List of score components per dimension
+- Suggestions for improvement
+- Raw review log (source for improvement agent)
 """
 
-from agents.base_agent import BaseAgent
-from prompt_quality.validators.validate_prompt_quality_en import validate_prompt_en
-from prompt_quality.languages import lang_en
-from typing import Tuple
 import json
+from pathlib import Path
+from typing import Tuple
 
 
-class PromptQualityAgent(BaseAgent):
-    def __init__(self):
-        super().__init__(name="PromptQualityAgent")
+class PromptQualityAgent:
+    def __init__(
+        self,
+        evaluation_path: Path = Path("config/scoring/quality_scoring_matrix.json"),
+        review_log_path: Path = Path(
+            "config/templates/quality_review_log_template.json"
+        ),
+    ):
+        self.evaluation_path = evaluation_path
+        self.review_log_path = review_log_path
 
     def run(self, prompt_text: str) -> Tuple[float, dict]:
         """
-        Run validation checks on the provided prompt string.
-
-        Args:
-            prompt_text (str): The YAML prompt content as a string.
-
-        Returns:
-            Tuple[float, dict]: Total score and detailed check results
+        Evaluate prompt and return score with feedback package.
         """
-        results = validate_prompt_en(prompt_text)
+        # Notes: prompt_text is currently unused – will be needed for real-time eval later
 
-        # Note: Scoring logic based on predefined weights
-        weights = {
-            "grammar_check": 0.10,
-            "idiomatic_check": 0.05,
-            "task_clarity": 0.30,
-            "structure_check": 0.25,
-            "lexical_fit": 0.10,
-            "tone_check": 0.10,
-            "translation_integrity": 0.10,
+        try:
+            weighted_eval = json.loads(self.evaluation_path.read_text(encoding="utf-8"))
+            raw_log = json.loads(self.review_log_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise RuntimeError(f"Failed to read input files: {e}")
+
+        # Notes: calculate total weighted score
+        weighted_scores = []
+        total_weight = 0.0
+        weighted_sum = 0.0
+
+        for dim in weighted_eval:
+            score = dim["score"]
+            weight = dim.get("weight", 1.0)
+            weighted_sum += score * weight
+            total_weight += weight
+            weighted_scores.append(
+                {"dimension": dim["dimension"], "score": score, "weight": weight}
+            )
+
+        final_score = round(weighted_sum / total_weight, 4) if total_weight else 0.0
+
+        # Notes: compile suggestions from raw_log if present
+        suggestions = []
+        for entry in raw_log:
+            dim = entry.get("dimension")
+            advice = entry.get("suggestion") or entry.get("recommendation")
+            if dim and advice:
+                suggestions.append({"dimension": dim, "suggestion": advice})
+
+        # Notes: consolidate final feedback object
+        feedback = {
+            "score": final_score,
+            "score_components": weighted_scores,
+            "suggestions": suggestions,
+            "raw_review_log": raw_log,
         }
 
-        score = 0.0
-        for check, weight in weights.items():
-            if results.get(check, {}).get("passed", False):
-                score += weight
-
-        score = round(score * 20) / 20  # Note: Round to nearest 0.05 step
-
-        return score, results
+        return final_score, feedback

@@ -5,93 +5,131 @@ Type: Python Script (CLI Entry Point)
 
 Purpose:
 --------
-This script validates and improves a batch of YAML prompt templates located in
-`prompts/templates/`, using a multi-step agent workflow.
+This script validates and improves one or multiple YAML prompt templates using a CLI interface.
 It evaluates prompt quality, improves them iteratively until a threshold is met,
-and writes change logs and versioned files.
+and writes structured feedback and change logs in JSON format.
 
 Usage:
 ------
-    python run_template_batch.py
+    python run_template_batch.py --file prompts/templates/feature_determination_v1.yaml
+    python run_template_batch.py --all
 
 Notes:
 ------
-- Outputs logs and improved prompts in the same folder as inputs.
+- Outputs logs and improved prompts in the structured logs/ directory.
 - Prompts must be named *_v1.yaml to follow versioning convention.
 """
 
+import sys
 from pathlib import Path
-from agents.prompt_quality_agent import PromptQualityAgent
-from agents.prompt_improvement_agent import PromptImprovementAgent
+import argparse
 import json
 import shutil
 from datetime import datetime
 
+from agents.prompt_quality_agent import PromptQualityAgent
+from agents.prompt_improvement_agent import PromptImprovementAgent
+from controller_agent import ControllerAgent
+
+# Ensure root project directory is in PYTHONPATH
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 # Configuration
 TEMPLATE_DIR = Path("prompts/templates")
-PROMPTS = [
-    "feature_determination_v1.yaml",
-    "use_case_determination_v1.yaml",
-    "industry_classification_v1.yaml",
-    "company_assignment_v1.yaml",
-    "contact_assignment_v1.yaml",
-]
+LOG_DIR = Path("logs")
 THRESHOLD = 0.85
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 5
 
 
-def log_changes(version_path: Path, old_text: str, new_text: str):
-    diff_path = version_path.with_suffix("_change_log.txt")
-    with diff_path.open("w", encoding="utf-8") as log:
-        log.write("# Prompt Change Log\n\n")
-        log.write("# Previous Version:\n\n")
-        log.write(old_text)
-        log.write("\n\n# Improved Version:\n\n")
-        log.write(new_text)
-    print(f"📝 Change log written to: {diff_path.name}")
+def write_log(category: str, name: str, data: dict):
+    path = LOG_DIR / category / f"{name}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    print(f"📝 {category.upper()} log saved: {path.name}")
 
 
-def run_batch():
+def run_template_workflow(prompt_path: Path):
     quality_agent = PromptQualityAgent()
     improve_agent = PromptImprovementAgent()
 
-    for file_name in PROMPTS:
-        current_path = TEMPLATE_DIR / file_name
-        base_name = current_path.stem.replace("_v1", "")
-        version = 1
+    current_path = prompt_path
+    base_name = current_path.stem.replace("_v1", "")
+    version = 1
 
-        while version <= MAX_ITERATIONS:
-            print(f"\n🔍 Processing {current_path.name} (v{version})")
+    while version <= MAX_ITERATIONS:
+        print(f"\n🔍 Processing {current_path.name} (v{version})")
+        prompt_text = current_path.read_text(encoding="utf-8")
 
-            prompt_text = current_path.read_text(encoding="utf-8")
-            score, feedback = quality_agent.run(prompt_text)
-            print(f"📊 Score: {score}")
+        # Score & evaluate
+        score, feedback = quality_agent.run(prompt_text)
+        write_log("quality_log", f"{base_name}_v{version}", feedback)
+        write_log("weighted_score", f"{base_name}_v{version}", {"score": score})
 
-            timestamp = datetime.now().strftime("%y%m%d_%H%M")
-            feedback_path = current_path.with_name(
-                f"{base_name}_v{version}_feedback_{timestamp}.json"
-            )
-            feedback_path.write_text(json.dumps(feedback, indent=2, ensure_ascii=False))
+        if score >= THRESHOLD:
+            final_path = TEMPLATE_DIR / f"{base_name}_template1.yaml"
+            shutil.copyfile(current_path, final_path)
+            print(f"✅ Threshold met. Saved as: {final_path.name}")
+            break
 
-            if score >= THRESHOLD:
-                final_path = TEMPLATE_DIR / f"{base_name}_template1.yaml"
-                shutil.copyfile(current_path, final_path)
-                print(f"✅ Threshold met. Saved as: {final_path.name}")
+        if version == MAX_ITERATIONS:
+            print("⛔️ Max iterations reached. Aborting.")
+            break
+
+        # Improvement Phase
+        improved_text = improve_agent.run(prompt_text, json.dumps(feedback))
+        next_version = version + 1
+        next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
+        next_prompt_path.write_text(improved_text)
+
+        write_log("feedback_log", f"{base_name}_v{next_version}", feedback)
+        write_log(
+            "change_log",
+            f"{base_name}_v{version}_to_v{next_version}",
+            {
+                "version_from": f"v{version}",
+                "version_to": f"v{next_version}",
+                "timestamp": datetime.now().isoformat(),
+                "diff_text": {"before": prompt_text, "after": improved_text},
+                "rationale": "Improved via GPT based on feedback",
+            },
+        )
+
+        # Controller check
+        controller = ControllerAgent(base_name, version, LOG_DIR)
+        if not controller.check_alignment():
+            if controller.request_retry():
+                continue
+            else:
+                print("❌ Retry failed or limit reached. Aborting.")
                 break
 
-            if version == MAX_ITERATIONS:
-                print("⛔️ Max iterations reached. Aborting improvement.")
-                break
+        current_path = next_prompt_path
+        version += 1
 
-            # Generate improved version
-            new_version_path = TEMPLATE_DIR / f"{base_name}_v{version+1}.yaml"
-            improved_text = improve_agent.run(prompt_text, json.dumps(feedback))
-            new_version_path.write_text(improved_text)
-            log_changes(new_version_path, prompt_text, improved_text)
 
-            current_path = new_version_path
-            version += 1
+def main():
+    parser = argparse.ArgumentParser(description="Prompt Template Validator & Improver")
+    parser.add_argument("--file", type=str, help="Path to the prompt file")
+    parser.add_argument(
+        "--all", action="store_true", help="Check all templates sequentially"
+    )
+    args = parser.parse_args()
+
+    if args.all:
+        prompts = [
+            "feature_determination_v1.yaml",
+            "use_case_determination_v1.yaml",
+            "industry_classification_v1.yaml",
+            "company_assignment_v1.yaml",
+            "contact_assignment_v1.yaml",
+        ]
+        for prompt_file in prompts:
+            run_template_workflow(TEMPLATE_DIR / prompt_file)
+    elif args.file:
+        run_template_workflow(Path(args.file))
+    else:
+        print("⚠️ Please provide either --file or --all.")
 
 
 if __name__ == "__main__":
-    run_batch()
+    main()
