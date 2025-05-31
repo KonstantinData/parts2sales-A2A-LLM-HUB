@@ -1,64 +1,53 @@
-Data Analyst | SQL, Python, Tableau | Machine Learning & Analytics Engineering | Business Process Optimization | Certified Commercial Specialist (IHK)
-
 # PARTS2SALES A2A LLM HUB
 
 ## Overview
 
-PARTS2SALES A2A LLM HUB is a modular, agent-driven prompt validation and refinement framework designed for industrial AI prompt pipelines. The central goal of this project is to ensure high-quality prompt development for business-critical applications, particularly in the B2B and manufacturing sector, where structured, interpretable, and reproducible LLM behavior is essential.
+**PARTS2SALES A2A LLM HUB** is a modular, agent-driven framework designed to validate and refine prompts within industrial AI pipelines. Tailored for B2B and manufacturing sectors, it ensures the development of high-quality prompts that are structured, interpretable, and reproducible—critical for business applications where consistency and reliability are paramount.
 
-This repository supports the development, evaluation, and iterative improvement of prompts using a set of autonomous agents. These agents simulate a feedback loop similar to human-in-the-loop validation but are optimized for automation and scalability.
+Leveraging autonomous agents, the system simulates a feedback loop akin to human-in-the-loop validation, optimized for automation and scalability. This approach aligns with best practices in prompt engineering, emphasizing precision, relevance, and performance optimization ([promptpanda.io](https://www.promptpanda.io/blog/ai-prompt-validation/?utm_source=chatgpt.com)).
 
----
+## Key Features
 
-## Project Goals
-
-* **Assure Prompt Quality** : Establish a validation pipeline that assesses prompt effectiveness across dimensions such as task clarity, domain fit, robustness, and composability.
-* **Enable Iterative Refinement** : Provide feedback-driven prompt improvement with contextual reasoning, automated explanation, and clear change tracking.
-* **Guarantee Reproducibility** : Leverage logs and structured data to trace prompt evolution from version v1 to a validated final template.
-* **Support Agent-to-Agent Orchestration (A2A)** : Automate decision-making and task handovers among validation, improvement, and control agents.
-* **Provide Scalable Logging & Evaluation** : Use structured feedback logs and visual performance diagnostics to scale prompt QA across multiple templates and tasks.
-
----
+- **Prompt Quality Assurance**: Evaluates prompts across dimensions like task clarity, domain alignment, robustness, and composability.
+- **Iterative Refinement**: Provides feedback-driven improvements with contextual reasoning and transparent change tracking.
+- **Reproducibility**: Maintains structured logs to trace prompt evolution from initial versions to validated templates.
+- **Agent-to-Agent Orchestration (A2A)**: Automates decision-making and task handovers among validation, improvement, and control agents.
+- **Scalable Evaluation**: Utilizes structured feedback logs and performance diagnostics to scale prompt quality assurance across multiple templates and tasks.
 
 ## Agent Architecture
 
 ### 1. `PromptQualityAgent`
 
-Responsible for evaluating the prompt using a scoring matrix defined in `config/scoring/quality_scoring_matrix.json` and semantic feedback provided in `config/templates/quality_review_log_template.json`. The evaluation includes weighted dimensions such as:
-
-* Task Clarity
-* User Alignment
-* Constraint Specification
-* Output Structure
-* Domain Fit
+Evaluates prompts using a scoring matrix defined in `config/scoring/template_scoring_matrix.py`. Key evaluation dimensions include:
+- Task Clarity
+- User Alignment
+- Constraint Specification
+- Output Structure
+- Domain Fit
 
 ### 2. `PromptImprovementAgent`
 
-Processes the output of the quality agent and translates suggestions into a refined prompt version. All changes are tracked with an inline rationale for transparency. This agent is intended to eventually rely on GPT (or another LLM) to re-generate the YAML prompt text based on structured feedback.
+Processes feedback from the quality agent to refine prompts. Changes are tracked with inline rationales for transparency. This agent utilizes LLMs to regenerate YAML prompt text based on structured feedback.
 
 ### 3. `ControllerAgent`
 
-Validates if the improvement made by the `PromptImprovementAgent` aligns with feedback from the `PromptQualityAgent`. If the alignment fails, it initiates a retry loop (max. 3 attempts) and ensures prompt revisions meet the expected quality before proceeding.
+Validates whether improvements align with feedback from the quality agent. If misalignment is detected, it initiates a retry loop (up to 3 attempts) to ensure prompt revisions meet expected quality standards.
 
-### 4. `Execution Phase`
+### 4. Execution Phase
 
-Once a prompt reaches a minimum quality score threshold (e.g., >= 0.85), it is executed with sample data to validate downstream performance (output formatting, extraction consistency, etc.). If successful, the prompt is versioned as `*_template1.yaml`.
-
----
+Once a prompt achieves a quality score above a defined threshold (e.g., ≥ 0.85), it undergoes execution with sample data to validate downstream performance, including output formatting and extraction consistency. Successful prompts are versioned as `*_template1.yaml`.
 
 ## Process Flow (A2A Orchestration)
 
-1. A prompt (e.g., `feature_determination_v1.yaml`) is passed to `run_template_batch.py`.
-2. `PromptQualityAgent` computes a weighted score and detailed review.
-3. If the score is below threshold, `PromptImprovementAgent` refines the prompt.
-4. `ControllerAgent` checks if the refinement addressed the original feedback.
-5. If not aligned, a retry is triggered (max 3 loops).
-6. Once validated, the prompt is saved as final and passed to the execution step.
+1. A prompt (e.g., `feature_determination_v1.yaml`) is input into `run_template_batch.py`.
+2. `PromptQualityAgent` computes a weighted score and provides a detailed review.
+3. If the score is below the threshold, `PromptImprovementAgent` refines the prompt.
+4. `ControllerAgent` checks if the refinement addresses the original feedback.
+5. If not aligned, a retry is triggered (maximum of 3 loops).
+6. Once validated, the prompt is saved as final and proceeds to the execution step.
 7. Logs are stored per category: `logs/{quality_log, weighted_score, feedback_log, change_log}`.
 
-This fully agent-driven loop is a blueprint for autonomous prompt QA in industrial-grade prompt systems.
-
----
+This agent-driven loop serves as a blueprint for autonomous prompt quality assurance in industrial-grade systems.
 
 ## Repository Structure
 
@@ -70,60 +59,51 @@ This fully agent-driven loop is a blueprint for autonomous prompt QA in industri
 │   └── templates/             # Human review input templates
 ├── docs/                      # Visual charts and documentation
 ├── logs/                      # Evaluation output structured by type
-├── prompts/templates/         # Versioned prompt sources (e.g. *_v1.yaml)
-├── scripts/                   # Future helpers, execution, preprocessing
-└── tests/                     # (Optional) agent test cases and scaffolds
+├── prompts/templates/         # Versioned prompt sources (e.g., *_v1.yaml)
+├── scripts/                   # Helper scripts for execution and preprocessing
+└── tests/                     # Agent test cases and scaffolds
 ```
-
----
 
 ## Getting Started
 
 ```bash
 # Set up environment
 python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # Set your OpenAI API key
 echo "OPENAI_API_KEY=sk-..." > .env
 
-# Run for single prompt
+# Run for a single prompt
 python cli/run_template_batch.py --file prompts/templates/feature_determination_v1.yaml
 
 # Or run all registered templates
 python cli/run_template_batch.py --all
 ```
 
----
-
 ## Future Extensions
 
-* Integration with LangChain or CrewAI for dynamic agent orchestration
-* Evaluation harness integration (OpenPromptEval, Promptfoo)
-* Dataset-driven stress testing and prompt drift monitoring
-* Output quality evaluation (e.g., JSON schema conformity)
-* GitHub Actions-based CI for prompt regression
+- **Integration with LangChain or CrewAI**: For dynamic agent orchestration.
+- **Evaluation Harness Integration**: Incorporate tools like OpenPromptEval or Promptfoo for enhanced evaluation.
+- **Dataset-Driven Stress Testing**: Implement stress tests and monitor prompt drift.
+- **Output Quality Evaluation**: Ensure outputs conform to JSON schema standards.
+- **CI/CD Integration**: Set up GitHub Actions for prompt regression testing.
 
----
+## Author
 
-## Authors
+**Konstantin Milonas**  
+*Data Analyst | SQL, Python, Tableau | Machine Learning & Analytics Engineering | Prompt Engineering | Business Process Optimization | Certified Commercial Specialist (IHK)*
 
-Built with passion by Konstantin Milonas
-
-Data Analyst | SQL, Python, Tableau | Machine Learning & Analytics Engineering | Promt Engineering | Business Process Optimization | Certified Commercial Specialist (IHK)
-
-For questions or contributions, open an issue or contact the maintainer.
-
----
+For inquiries or contributions, please open an issue or contact the maintainer.
 
 ## License
 
-This project is licensed under a customized [LICENSE ](LICENSE "double click")with additional restrictions.
+This project is licensed under a customized [LICENSE](LICENSE) with the following stipulations:
 
-* ✅ Use allowed for non-commercial, research, and internal applications
-* ❌ Commercial use, resale, or model training/fine-tuning on prompt content is prohibited without permission
+- ✅ Permitted for non-commercial, research, and internal applications.
+- ❌ Commercial use, resale, or model training/fine-tuning on prompt content is prohibited without explicit permission.
 
-See [LICENSE ](LICENSE "double click")for details.
+See the [LICENSE](LICENSE) file for detailed information.
 
 © 2025
