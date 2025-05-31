@@ -1,23 +1,19 @@
-#!/usr/bin/env python3
+# run_template_batch.py
 """
-File: run_template_batch.py
-Type: Python Script (CLI Entry Point)
+CLI Runner for Agent-Based Prompt Evaluation and Improvement
 
 Purpose:
 --------
-This script validates and improves one or multiple YAML prompt templates using a CLI interface.
-It evaluates prompt quality, improves them iteratively until a threshold is met,
-and writes structured feedback and change logs in JSON format.
+This script orchestrates:
+- Quality scoring via PromptQualityAgent
+- Iterative prompt improvements via PromptImprovementAgent
+- Feedback validation via ControllerAgent
 
-Usage:
-------
-    python run_template_batch.py --file prompts/templates/feature_determination_v1.yaml
-    python run_template_batch.py --all
+It supports both single-file mode (--file) and batch mode (--all).
 
-Notes:
-------
-- Outputs logs and improved prompts in the structured logs/ directory.
-- Prompts must be named *_v1.yaml to follow versioning convention.
+#Notes:
+- Uses JSON logs per version in /logs/{quality|feedback|change}_log/
+- Prompts must follow *_v1.yaml versioning for correct iteration
 """
 
 import sys
@@ -27,12 +23,10 @@ import json
 import shutil
 from datetime import datetime
 
+# Agent imports
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
 from controller_agent import ControllerAgent
-
-# Ensure root project directory is in PYTHONPATH
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Configuration
 TEMPLATE_DIR = Path("prompts/templates")
@@ -60,8 +54,8 @@ def run_template_workflow(prompt_path: Path):
         print(f"\n🔍 Processing {current_path.name} (v{version})")
         prompt_text = current_path.read_text(encoding="utf-8")
 
-        # Score & evaluate
-        score, feedback = quality_agent.run(prompt_text)
+        # Step 1: Evaluate quality
+        score, feedback = quality_agent.run(prompt_text, base_name, version)
         write_log("quality_log", f"{base_name}_v{version}", feedback)
         write_log("weighted_score", f"{base_name}_v{version}", {"score": score})
 
@@ -75,8 +69,8 @@ def run_template_workflow(prompt_path: Path):
             print("⛔️ Max iterations reached. Aborting.")
             break
 
-        # Improvement Phase
-        improved_text = improve_agent.run(prompt_text, json.dumps(feedback))
+        # Step 2: Improve prompt
+        improved_text, rationale = improve_agent.run(prompt_text, feedback)
         next_version = version + 1
         next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
         next_prompt_path.write_text(improved_text)
@@ -90,11 +84,11 @@ def run_template_workflow(prompt_path: Path):
                 "version_to": f"v{next_version}",
                 "timestamp": datetime.now().isoformat(),
                 "diff_text": {"before": prompt_text, "after": improved_text},
-                "rationale": "Improved via GPT based on feedback",
+                "rationale": rationale,
             },
         )
 
-        # Controller check
+        # Step 3: Alignment check
         controller = ControllerAgent(base_name, version, LOG_DIR)
         if not controller.check_alignment():
             if controller.request_retry():
@@ -108,10 +102,10 @@ def run_template_workflow(prompt_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prompt Template Validator & Improver")
+    parser = argparse.ArgumentParser(description="Prompt Template Evaluator & Improver")
     parser.add_argument("--file", type=str, help="Path to the prompt file")
     parser.add_argument(
-        "--all", action="store_true", help="Check all templates sequentially"
+        "--all", action="store_true", help="Check all predefined templates"
     )
     args = parser.parse_args()
 
@@ -128,7 +122,7 @@ def main():
     elif args.file:
         run_template_workflow(Path(args.file))
     else:
-        print("⚠️ Please provide either --file or --all.")
+        print("⚠️ Please provide either --file <path> or --all.")
 
 
 if __name__ == "__main__":
