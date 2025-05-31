@@ -51,9 +51,18 @@ coverage.xml
 # ----------------------------------------
 
 data/
-logs/
 *.log
 *.pdf
+
+# Agentenlogs (erlaube .gitkeep als Platzhalter)
+logs/weighted_score/*
+logs/quality_log/*
+logs/feedback_log/*
+logs/change_log/*
+!logs/**/.gitkeep
+
+# Prompt-Versionen ab v2 aufwärts ignorieren (aber nicht v1 oder template)
+prompts/templates/*_v[2-9]*.yaml
 
 # ----------------------------------------
 # Konfiguration / Secrets

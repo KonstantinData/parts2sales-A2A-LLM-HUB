@@ -1,182 +1,145 @@
 # controller_agent.py
 """
-Controller Agent for Coordinating Prompt Quality and Improvement
+Controller Agent - Professional Version
 
 Purpose:
 --------
-This agent acts as a central coordinator between the prompt quality assessment,
-prompt improvement logic, and execution. It ensures that prompt feedback aligns
-with quality findings both structurally and semantically, and that actual improvements
-occur before execution.
-
-Key Features:
--------------
-1. Loads and verifies log files (quality, feedback, prompt).
-2. Evaluates feedback alignment using OpenAI's GPT (semantic validation).
-3. Detects whether a prompt has meaningfully changed.
-4. Implements retry logic if improvement fails or misaligns.
-
-Environment:
-------------
-- Requires `openai` and `python-dotenv`
-- Expects an `.env` file containing: OPENAI_API_KEY=sk-...
+- Validates if prompt improvements align with provided feedback using GPT-4.
+- Logs decisions with timestamp and explanations.
+- Controls retry logic with maximum retry limits.
+- Persistently tracks retry attempts based on saved logs.
 """
 
-import os
 import json
 from pathlib import Path
-from typing import Optional
-
-from dotenv import load_dotenv
-import openai
-
-# Load API key from .env file
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+from datetime import datetime
+from openai import OpenAI
 
 
 class ControllerAgent:
     def __init__(
-        self, base_name: str, version: int, log_dir: Path, max_retries: int = 3
+        self,
+        base_name: str,
+        version: int,
+        log_dir: Path,
+        client: OpenAI,
+        max_retries: int = 3,
     ):
         self.base_name = base_name
         self.version = version
         self.log_dir = log_dir
-        self.retry_count = 0
+        self.control_log_dir = log_dir / "control_log"
+        self.control_log_dir.mkdir(parents=True, exist_ok=True)
+
+        self.client = client
         self.max_retries = max_retries
 
-    def _get_log_file(self, category: str, suffix: str) -> Optional[Path]:
-        """
-        Helper function to construct a valid path to a log file if it exists.
-        """
-        file_path = self.log_dir / category / f"{self.base_name}_{suffix}.json"
-        return file_path if file_path.exists() else None
+        # Persistent retry count laden
+        self.retry_count = self._load_retry_count()
 
-    def load_json(self, category: str, suffix: str) -> dict:
-        """
-        Loads a JSON file from the given log category and suffix.
-        """
-        file_path = self._get_log_file(category, suffix)
-        if not file_path:
-            raise FileNotFoundError(
-                f"Missing log file: {self.log_dir / category / f'{self.base_name}_{suffix}.json'}"
-            )
-        return json.loads(file_path.read_text(encoding="utf-8"))
+    def _load_retry_count(self) -> int:
+        """Liest Control-Logs und zählt vorhandene Retries für diese Version."""
+        retry_count = 0
+        for file in self.control_log_dir.glob(
+            f"{self.base_name}_v{self.version}_*.json"
+        ):
+            try:
+                data = json.loads(file.read_text(encoding="utf-8"))
+                if data.get("retry_requested", False):
+                    retry_count += 1
+            except Exception:
+                continue
+        return retry_count
 
-    def check_alignment(self) -> bool:
+    def check_alignment(self, prompt_text: str, feedback: dict) -> bool:
         """
-        Checks whether the feedback addresses the quality issues:
-        - Structurally: all quality sections are covered in feedback
-        - Semantically: each feedback section addresses the concern using OpenAI GPT
+        Perform an alignment check by asking GPT-4 if the improved prompt
+        sufficiently addresses all feedback points.
+
+        Returns:
+            bool: True if aligned, False otherwise.
         """
-        try:
-            quality_data = self.load_json("quality_log", f"v{self.version}")
-            feedback_data = self.load_json("feedback_log", f"v{self.version + 1}")
-
-            quality_keys = set(quality_data.keys())
-            feedback_keys = set(feedback_data.keys())
-
-            # Step 1: Structural alignment
-            key_alignment = quality_keys.issubset(feedback_keys)
-
-            # Step 2: Semantic validation using OpenAI
-            semantic_valid = self.evaluate_feedback_semantically(
-                quality_data, feedback_data
-            )
-
-            print(
-                f"🧠 Alignment Check: Keys OK = {key_alignment}, Semantics OK = {semantic_valid}"
-            )
-            return key_alignment and semantic_valid
-
-        except Exception as e:
-            print(f"❌ Alignment check failed: {e}")
-            return False
-
-    def evaluate_feedback_semantically(
-        self, quality_data: dict, feedback_data: dict
-    ) -> bool:
-        """
-        Iterates over each feedback item and validates it with OpenAI's language model.
-        """
-        for section, issue in quality_data.items():
-            if section not in feedback_data:
-                print(f"⚠️ Missing feedback for section '{section}'")
-                return False
-            feedback = feedback_data[section]
-            prompt = self.build_openai_prompt(issue, feedback)
-            if not self.evaluate_with_openai(prompt):
-                print(f"⚠️ Weak or unrelated feedback in section '{section}'")
-                return False
-        return True
-
-    def build_openai_prompt(self, issue: str, feedback: str) -> str:
-        """
-        Constructs a prompt to ask OpenAI whether the feedback resolves the quality issue.
-        """
-        return (
-            f"Here is a prompt quality concern:\n\n"
-            f"{issue}\n\n"
-            f"Here is the proposed feedback to improve it:\n\n"
-            f"{feedback}\n\n"
-            f"Does this feedback clearly address and resolve the concern? Reply with YES or NO."
+        system_prompt = (
+            "You are a prompt evaluation expert. Given a prompt and feedback, "
+            "assess if the prompt improvements sufficiently address the feedback. "
+            "Respond succinctly with 'yes' or 'no', followed by a brief explanation."
+        )
+        user_prompt = (
+            f"Improved Prompt:\n{prompt_text}\n\n"
+            f"Feedback:\n{json.dumps(feedback, indent=2)}\n\n"
+            "Does the improved prompt sufficiently address the feedback? "
+            "Answer with 'yes' or 'no' and provide a brief explanation."
         )
 
-    def evaluate_with_openai(self, prompt: str) -> bool:
-        """
-        Sends prompt to OpenAI's chat model and returns True if response is YES.
-        """
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.0,
+                max_tokens=150,
             )
-            result = response.choices[0].message["content"].strip().upper()
-            return "YES" in result
+            answer = response.choices[0].message.content.strip().lower()
+            aligned = answer.startswith("yes")
+
+            self._log_decision(aligned, answer)
+            return aligned
+
         except Exception as e:
-            print(f"❌ OpenAI call failed: {e}")
+            self._log_decision(
+                False, f"Alignment check failed due to API error: {str(e)}"
+            )
             return False
 
-    def prompt_has_significant_changes(self) -> bool:
-        """
-        Compares the current prompt version with the previous one.
-        Returns True if a meaningful change occurred.
-        """
-        try:
-            previous = self.load_json("prompt_log", f"v{self.version}")[
-                "content"
-            ].strip()
-            current = self.load_json("prompt_log", f"v{self.version + 1}")[
-                "content"
-            ].strip()
-            changed = previous != current
-            print(f"🔍 Prompt changed: {changed}")
-            return changed
-        except Exception as e:
-            print(f"❌ Change detection failed: {e}")
-            return False
+    def _log_decision(self, aligned: bool, explanation: str):
+        timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
+        log_data = {
+            "base_name": self.base_name,
+            "version": self.version,
+            "timestamp": timestamp,
+            "aligned": aligned,
+            "explanation": explanation,
+            "retry_requested": False,
+        }
+        log_path = (
+            self.control_log_dir / f"{self.base_name}_v{self.version}_{timestamp}.json"
+        )
+        log_path.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
+        print(f"📝 Control log saved: {log_path.name}")
 
     def request_retry(self) -> bool:
         """
-        Returns True if alignment failed or no meaningful changes were made,
-        and retry attempts are still available.
-        """
-        aligned = self.check_alignment()
-        changed = self.prompt_has_significant_changes()
+        Determines if a retry should be requested based on retry count and max limit.
 
-        if not aligned or not changed:
-            self.retry_count += 1
-            if self.retry_count > self.max_retries:
-                print("🚫 Retry limit exceeded.")
-                return False
-            print(f"🔁 Retry #{self.retry_count} triggered.")
-            return True
-
-        return False
-
-    def reset(self):
+        Returns:
+            bool: True if retry allowed, False if max retries reached.
         """
-        Resets the retry count (can be used between cycles).
-        """
-        self.retry_count = 0
+        if self.retry_count >= self.max_retries:
+            print(
+                f"⚠️ Max retries ({self.max_retries}) reached for {self.base_name} v{self.version}."
+            )
+            return False
+
+        self.retry_count += 1
+        print(
+            f"🔁 Retry #{self.retry_count} requested for {self.base_name} v{self.version}."
+        )
+        # Log the retry request
+        timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
+        log_data = {
+            "base_name": self.base_name,
+            "version": self.version,
+            "timestamp": timestamp,
+            "retry_requested": True,
+            "retry_count": self.retry_count,
+        }
+        log_path = (
+            self.control_log_dir
+            / f"{self.base_name}_v{self.version}_retry_{timestamp}.json"
+        )
+        log_path.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
+        print(f"📝 Retry log saved: {log_path.name}")
+
+        return True

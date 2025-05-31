@@ -1,101 +1,84 @@
 {
-  "prompt_score_weighted": 0.766,
   "details": [
     {
       "dimension": "task_clarity",
-      "weight": 1.0,
-      "score": 0.9,
-      "weighted_contribution": 0.0595
+      "positive": "The task is clearly defined with explicit instructions.",
+      "suggestion": "Consider clarifying ambiguous parts or providing examples for better understanding."
     },
     {
       "dimension": "output_spec",
-      "weight": 1.0,
-      "score": 0.6,
-      "weighted_contribution": 0.0397
+      "positive": "Output format and requirements are explicitly stated.",
+      "suggestion": "Add explicit output structure such as JSON keys or examples to avoid ambiguity."
     },
     {
       "dimension": "structure_check",
-      "weight": 0.9,
-      "score": 0.85,
-      "weighted_contribution": 0.0504
+      "positive": "Prompt is logically organized and easy to follow.",
+      "suggestion": "Improve separation between sections to enhance readability and structure."
     },
     {
       "dimension": "constraint_clarity",
-      "weight": 0.9,
-      "score": 0.7,
-      "weighted_contribution": 0.0415
+      "positive": "Constraints are clearly communicated and unambiguous.",
+      "suggestion": "Rephrase negations to positive constraints for more robust instructions."
     },
     {
       "dimension": "reasoning_scope",
-      "weight": 0.85,
-      "score": 0.8,
-      "weighted_contribution": 0.0431
+      "positive": "Reasoning boundaries are well specified and respected.",
+      "suggestion": "Provide concrete examples of allowed or forbidden reasoning to avoid confusion."
     },
     {
       "dimension": "lexical_fit",
-      "weight": 0.7,
-      "score": 0.75,
-      "weighted_contribution": 0.0332
+      "positive": "Terminology fits the domain and target audience well.",
+      "suggestion": "Replace overly formal or technical terms with simpler synonyms if possible."
     },
     {
       "dimension": "idiomatic",
-      "weight": 0.65,
-      "score": 0.8,
-      "weighted_contribution": 0.0308
+      "positive": "Language flows naturally and uses idiomatic expressions appropriately.",
+      "suggestion": "Avoid awkward phrasing and improve fluency for smoother reading."
     },
     {
       "dimension": "tone_check",
-      "weight": 0.6,
-      "score": 0.65,
-      "weighted_contribution": 0.024
+      "positive": "Tone matches the context and purpose appropriately.",
+      "suggestion": "Soften imperatives or make the tone more engaging depending on audience."
     },
     {
       "dimension": "translation_integrity",
-      "weight": 0.5,
-      "score": 0.7,
-      "weighted_contribution": 0.0199
+      "positive": "Prompt structure supports easy and accurate translation.",
+      "suggestion": "Avoid culturally specific phrases that might lose meaning in translation."
     },
     {
       "dimension": "robustness",
-      "weight": 0.85,
-      "score": 0.9,
-      "weighted_contribution": 0.0527
+      "positive": "Prompt handles different inputs gracefully without errors.",
+      "suggestion": "Add fallback instructions for uncertain or incomplete inputs."
     },
     {
       "dimension": "ambiguity_avoidance",
-      "weight": 0.75,
-      "score": 0.8,
-      "weighted_contribution": 0.0465
+      "positive": "Ambiguities are minimized through clear definitions.",
+      "suggestion": "Clarify terms or examples that could have multiple interpretations."
     },
     {
       "dimension": "domain_alignment",
-      "weight": 0.7,
-      "score": 0.85,
-      "weighted_contribution": 0.0435
+      "positive": "Content and language are well aligned with the domain expertise.",
+      "suggestion": "Adjust domain-specific jargon or examples for better fit to the target field."
     },
     {
       "dimension": "failure_modes",
-      "weight": 0.8,
-      "score": 0.6,
-      "weighted_contribution": 0.0355
+      "positive": "Potential failure modes are anticipated and mitigated.",
+      "suggestion": "Include explicit instructions on how to handle unknown or missing data."
     },
     {
       "dimension": "evalability",
-      "weight": 0.85,
-      "score": 0.5,
-      "weighted_contribution": 0.0355
+      "positive": "Outputs can be evaluated automatically with clear criteria.",
+      "suggestion": "Define output validation rules or formats to support automated evaluation."
     },
     {
       "dimension": "composability",
-      "weight": 0.65,
-      "score": 0.8,
-      "weighted_contribution": 0.0308
+      "positive": "Prompt is modular and can be integrated into larger pipelines.",
+      "suggestion": "Add sections for auxiliary tasks or instructions for integration."
     },
     {
       "dimension": "user_alignment",
-      "weight": 0.9,
-      "score": 0.95,
-      "weighted_contribution": 0.0613
+      "positive": "Prompt aligns well with user goals and expectations.",
+      "suggestion": "Explain how outputs will be used or why certain constraints exist to increase relevance."
     }
   ]
 }

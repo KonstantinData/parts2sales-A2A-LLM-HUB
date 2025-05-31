@@ -12,39 +12,56 @@ This script orchestrates:
 It supports both single-file mode (--file) and batch mode (--all).
 
 #Notes:
-- Uses JSON logs per version in /logs/{quality|feedback|change}_log/
+- Uses JSON logs per version in /logs/{quality|feedback|change|prompt}_log/
 - Prompts must follow *_v1.yaml versioning for correct iteration
 """
 
+import os
 import sys
 from pathlib import Path
 import argparse
 import json
 import shutil
 from datetime import datetime
+import time
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# Load environment variables
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Dynamically add project root to sys.path
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 # Agent imports
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
-from controller_agent import ControllerAgent
+from agents.controller_agent import ControllerAgent
 
 # Configuration
-TEMPLATE_DIR = Path("prompts/templates")
-LOG_DIR = Path("logs")
+TEMPLATE_DIR = ROOT / "prompts/templates"
+LOG_DIR = ROOT / "logs"
 THRESHOLD = 0.85
-MAX_ITERATIONS = 5
+MAX_ITERATIONS = 3
+QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/quality_scoring_matrix.json"
 
 
 def write_log(category: str, name: str, data: dict):
-    path = LOG_DIR / category / f"{name}.json"
+    timestamp = datetime.now().strftime("%y%m%d_%H%M")
+    path = LOG_DIR / category / f"{name}_{timestamp}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    print(f"📝 {category.upper()} log saved: {path.name}")
+    print(f"📜 {category.upper()} log saved: {path.name}")
 
 
 def run_template_workflow(prompt_path: Path):
-    quality_agent = PromptQualityAgent()
-    improve_agent = PromptImprovementAgent()
+    quality_agent = PromptQualityAgent(
+        client, evaluation_path=QUALITY_SCORING_MATRIX_PATH
+    )
+    improve_agent = PromptImprovementAgent(client, creative_mode=True)
 
     current_path = prompt_path
     base_name = current_path.stem.replace("_v1", "")
@@ -56,6 +73,7 @@ def run_template_workflow(prompt_path: Path):
 
         # Step 1: Evaluate quality
         score, feedback = quality_agent.run(prompt_text, base_name, version)
+        write_log("prompt_log", f"{base_name}_v{version}", {"content": prompt_text})
         write_log("quality_log", f"{base_name}_v{version}", feedback)
         write_log("weighted_score", f"{base_name}_v{version}", {"score": score})
 
@@ -75,6 +93,9 @@ def run_template_workflow(prompt_path: Path):
         next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
         next_prompt_path.write_text(improved_text)
 
+        write_log(
+            "prompt_log", f"{base_name}_v{next_version}", {"content": improved_text}
+        )
         write_log("feedback_log", f"{base_name}_v{next_version}", feedback)
         write_log(
             "change_log",
@@ -89,9 +110,10 @@ def run_template_workflow(prompt_path: Path):
         )
 
         # Step 3: Alignment check
-        controller = ControllerAgent(base_name, version, LOG_DIR)
-        if not controller.check_alignment():
+        controller = ControllerAgent(base_name, version, LOG_DIR, client)
+        if not controller.check_alignment(improved_text, feedback):
             if controller.request_retry():
+                time.sleep(1)
                 continue
             else:
                 print("❌ Retry failed or limit reached. Aborting.")
@@ -99,6 +121,7 @@ def run_template_workflow(prompt_path: Path):
 
         current_path = next_prompt_path
         version += 1
+        time.sleep(1)
 
 
 def main():

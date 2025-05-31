@@ -1,101 +1,20 @@
 {
-  "prompt_score_weighted": 0.766,
-  "details": [
-    {
-      "dimension": "task_clarity",
-      "weight": 1.0,
-      "score": 0.9,
-      "weighted_contribution": 0.0595
-    },
-    {
-      "dimension": "output_spec",
-      "weight": 1.0,
-      "score": 0.6,
-      "weighted_contribution": 0.0397
-    },
-    {
-      "dimension": "structure_check",
-      "weight": 0.9,
-      "score": 0.85,
-      "weighted_contribution": 0.0504
-    },
-    {
-      "dimension": "constraint_clarity",
-      "weight": 0.9,
-      "score": 0.7,
-      "weighted_contribution": 0.0415
-    },
-    {
-      "dimension": "reasoning_scope",
-      "weight": 0.85,
-      "score": 0.8,
-      "weighted_contribution": 0.0431
-    },
-    {
-      "dimension": "lexical_fit",
-      "weight": 0.7,
-      "score": 0.75,
-      "weighted_contribution": 0.0332
-    },
-    {
-      "dimension": "idiomatic",
-      "weight": 0.65,
-      "score": 0.8,
-      "weighted_contribution": 0.0308
-    },
-    {
-      "dimension": "tone_check",
-      "weight": 0.6,
-      "score": 0.65,
-      "weighted_contribution": 0.024
-    },
-    {
-      "dimension": "translation_integrity",
-      "weight": 0.5,
-      "score": 0.7,
-      "weighted_contribution": 0.0199
-    },
-    {
-      "dimension": "robustness",
-      "weight": 0.85,
-      "score": 0.9,
-      "weighted_contribution": 0.0527
-    },
-    {
-      "dimension": "ambiguity_avoidance",
-      "weight": 0.75,
-      "score": 0.8,
-      "weighted_contribution": 0.0465
-    },
-    {
-      "dimension": "domain_alignment",
-      "weight": 0.7,
-      "score": 0.85,
-      "weighted_contribution": 0.0435
-    },
-    {
-      "dimension": "failure_modes",
-      "weight": 0.8,
-      "score": 0.6,
-      "weighted_contribution": 0.0355
-    },
-    {
-      "dimension": "evalability",
-      "weight": 0.85,
-      "score": 0.5,
-      "weighted_contribution": 0.0355
-    },
-    {
-      "dimension": "composability",
-      "weight": 0.65,
-      "score": 0.8,
-      "weighted_contribution": 0.0308
-    },
-    {
-      "dimension": "user_alignment",
-      "weight": 0.9,
-      "score": 0.95,
-      "weighted_contribution": 0.0613
-    }
+  "dimensions": [
+    {"dimension": "task_clarity", "weight": 1.0},
+    {"dimension": "output_spec", "weight": 1.0},
+    {"dimension": "structure_check", "weight": 0.9},
+    {"dimension": "constraint_clarity", "weight": 0.9},
+    {"dimension": "reasoning_scope", "weight": 0.85},
+    {"dimension": "lexical_fit", "weight": 0.7},
+    {"dimension": "idiomatic", "weight": 0.65},
+    {"dimension": "tone_check", "weight": 0.6},
+    {"dimension": "translation_integrity", "weight": 0.5},
+    {"dimension": "robustness", "weight": 0.85},
+    {"dimension": "ambiguity_avoidance", "weight": 0.75},
+    {"dimension": "domain_alignment", "weight": 0.7},
+    {"dimension": "failure_modes", "weight": 0.8},
+    {"dimension": "evalability", "weight": 0.85},
+    {"dimension": "composability", "weight": 0.65},
+    {"dimension": "user_alignment", "weight": 0.9}
   ]
 }
