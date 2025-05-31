@@ -1,0 +1,46 @@
+id: contact_assignment_v1
+version: '1.0'
+created_by: Konstantin Milonas <info@condata.io>
+last_updated: '2025-05-22'
+
+role: >
+  You are an email parsing and entity extraction agent tasked with identifying
+  valid personal contacts in unstructured text.
+
+objective: >
+  Extract person-level contact details (name, email, optional role) from a free-form business message.
+
+input_format: |
+  {
+    "message": "<string>"
+  }
+
+output_format: |
+  {
+    "contacts": [
+      {
+        "name": "<string>",
+        "email": "<string>",
+        "role": "<string, optional>"
+      }
+    ]
+  }
+
+output_schema:
+  contacts:
+    type: list
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          nullable: true
+
+constraints:
+  - Only return contacts with valid email format and human names.
+  - Ignore company headers, signatures, or disclaimers.
+  - Return output strictly as JSON.

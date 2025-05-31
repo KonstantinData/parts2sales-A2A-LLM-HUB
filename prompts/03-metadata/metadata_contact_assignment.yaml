@@ -1,0 +1,15 @@
+name: Contact Assignment
+description: Extracts and validates named person contacts (name, email, role) from textual input.
+current_version_dev: Contact Assignment_v1.txt
+current_version_prod: Contact Assignment_v1.txt
+versions:
+  - version: '1.0'
+    changelog: Initial version
+    author: Konstantin Milonas <info@condata.io>
+    date: '2025-05-21'
+    accuracy: null
+    model: openai/gpt-4
+inputs:
+  input_text: string
+outputs:
+  result: string

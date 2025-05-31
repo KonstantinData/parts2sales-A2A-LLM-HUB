@@ -1,27 +1,9 @@
-# run_template_batch.py
-"""
-CLI Runner for Agent-Based Prompt Evaluation and Improvement
-
-Purpose:
---------
-This script orchestrates:
-- Quality scoring via PromptQualityAgent
-- Iterative prompt improvements via PromptImprovementAgent
-- Feedback validation via ControllerAgent
-
-It supports both single-file mode (--file) and batch mode (--all).
-
-#Notes:
-- Uses JSON logs per version in /logs/{quality|feedback|change|prompt}_log/
-- Prompts must follow *_v1.yaml versioning for correct iteration
-"""
-
 import os
 import sys
-from pathlib import Path
 import argparse
 import json
 import shutil
+from pathlib import Path
 from datetime import datetime
 import time
 from dotenv import load_dotenv
@@ -42,11 +24,12 @@ from agents.prompt_improvement_agent import PromptImprovementAgent
 from agents.controller_agent import ControllerAgent
 
 # Configuration
-TEMPLATE_DIR = ROOT / "prompts/templates"
+TEMPLATE_DIR = ROOT / "prompts/00-templates"
+EXAMPLE_DIR = ROOT / "prompts/01-examples"
 LOG_DIR = ROOT / "logs"
-THRESHOLD = 0.85
+THRESHOLD = 0.90
 MAX_ITERATIONS = 3
-QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/quality_scoring_matrix.json"
+QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/template_scoring_matrix.json"
 
 
 def write_log(category: str, name: str, data: dict):
@@ -71,23 +54,22 @@ def run_template_workflow(prompt_path: Path):
         print(f"\n🔍 Processing {current_path.name} (v{version})")
         prompt_text = current_path.read_text(encoding="utf-8")
 
-        # Step 1: Evaluate quality
         score, feedback = quality_agent.run(prompt_text, base_name, version)
         write_log("prompt_log", f"{base_name}_v{version}", {"content": prompt_text})
         write_log("quality_log", f"{base_name}_v{version}", feedback)
         write_log("weighted_score", f"{base_name}_v{version}", {"score": score})
 
         if score >= THRESHOLD:
-            final_path = TEMPLATE_DIR / f"{base_name}_template1.yaml"
+            EXAMPLE_DIR.mkdir(parents=True, exist_ok=True)
+            final_path = EXAMPLE_DIR / f"{base_name}_example_v{version}.yaml"
             shutil.copyfile(current_path, final_path)
-            print(f"✅ Threshold met. Saved as: {final_path.name}")
+            print(f"✅ Threshold met. Saved as: {final_path}")
             break
 
         if version == MAX_ITERATIONS:
             print("⛔️ Max iterations reached. Aborting.")
             break
 
-        # Step 2: Improve prompt
         improved_text, rationale = improve_agent.run(prompt_text, feedback)
         next_version = version + 1
         next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
@@ -109,7 +91,6 @@ def run_template_workflow(prompt_path: Path):
             },
         )
 
-        # Step 3: Alignment check
         controller = ControllerAgent(base_name, version, LOG_DIR, client)
         if not controller.check_alignment(improved_text, feedback):
             if controller.request_retry():
@@ -133,15 +114,11 @@ def main():
     args = parser.parse_args()
 
     if args.all:
-        prompts = [
-            "feature_determination_v1.yaml",
-            "use_case_determination_v1.yaml",
-            "industry_classification_v1.yaml",
-            "company_assignment_v1.yaml",
-            "contact_assignment_v1.yaml",
-        ]
-        for prompt_file in prompts:
-            run_template_workflow(TEMPLATE_DIR / prompt_file)
+        if not TEMPLATE_DIR.exists():
+            print(f"⚠️ Directory {TEMPLATE_DIR} not found.")
+            return
+        for prompt_file in TEMPLATE_DIR.glob("*.yaml"):
+            run_template_workflow(prompt_file)
     elif args.file:
         run_template_workflow(Path(args.file))
     else:

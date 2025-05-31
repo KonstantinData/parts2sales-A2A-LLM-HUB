@@ -1,0 +1,33 @@
+company_assignment:
+  description: Matches input entities to known company identities from internal or
+    external registries.
+  current_version_prod: Company Assignment_v1.txt
+  current_version_dev: Company Assignment_v1.txt
+  metadata_file: 03-metadata/metadata_company_assignment.yaml
+  production_prompt: 02-production/Company Assignment_v1.txt.yaml
+contact_assignment:
+  description: Extracts and validates named person contacts (name, email, role) from
+    textual input.
+  current_version_prod: Contact Assignment_v1.txt
+  current_version_dev: Contact Assignment_v1.txt
+  metadata_file: 03-metadata/metadata_contact_assignment.yaml
+  production_prompt: 02-production/Contact Assignment_v1.txt.yaml
+feature_determination:
+  description: Identifies key features or product properties from free text descriptions.
+  current_version_prod: Feature Determination_v1.txt
+  current_version_dev: Feature Determination_v1.txt
+  metadata_file: 03-metadata/metadata_feature_determination.yaml
+  production_prompt: 02-production/Feature Determination_v1.txt.yaml
+industry_classification:
+  description: Classifies the industry domain based on company profile or description.
+  current_version_prod: Industry Classification_v1.txt
+  current_version_dev: Industry Classification_v1.txt
+  metadata_file: 03-metadata/metadata_industry_classification.yaml
+  production_prompt: 02-production/Industry Classification_v1.txt.yaml
+use_case_determination:
+  description: Infers the primary user or customer use case from business context
+    or input queries.
+  current_version_prod: Use Case Determination_v1.txt
+  current_version_dev: Use Case Determination_v1.txt
+  metadata_file: 03-metadata/metadata_use_case_determination.yaml
+  production_prompt: 02-production/Use Case Determination_v1.txt.yaml

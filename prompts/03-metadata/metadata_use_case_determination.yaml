@@ -1,0 +1,15 @@
+name: Use Case Determination
+description: Infers the primary user or customer use case from business context or input queries.
+current_version_dev: Use Case Determination_v1.txt
+current_version_prod: Use Case Determination_v1.txt
+versions:
+  - version: '1.0'
+    changelog: Initial version
+    author: Konstantin Milonas <info@condata.io>
+    date: '2025-05-21'
+    accuracy: null
+    model: openai/gpt-4
+inputs:
+  input_text: string
+outputs:
+  result: string

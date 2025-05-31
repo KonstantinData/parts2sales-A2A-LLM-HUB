@@ -1,0 +1,15 @@
+name: C
+description: Matches input entities to known company identities from internal or external registries.
+current_version_dev: Company Assignment_v1.txt
+current_version_prod: Company Assignment_v1.txt
+versions:
+  - version: '1.0'
+    changelog: Initial version
+    author: Konstantin Milonas <info@condata.io>
+    date: '2025-05-21'
+    accuracy: null
+    model: openai/gpt-4
+inputs:
+  input_text: string
+outputs:
+  result: string

@@ -1,13 +1,29 @@
+"""
+PromptQualityAgent
+
+This agent evaluates the quality of prompt templates based on predefined scoring dimensions.
+It is designed to work in prompt development workflows where prompt quality is iteratively assessed
+before prompt execution (e.g., via LLMs). The scoring is based on a weighted evaluation matrix
+that defines relevant prompt-intrinsic dimensions.
+
+Notes:
+------
+- The scoring matrix is defined in `template_scoring_matrix.py` and should reflect prompt-level criteria only.
+- For evaluating LLM-generated outputs (e.g. search results), use a separate `example_scoring_matrix.py`.
+- The agent expects the LLM response to be a strictly valid JSON array with `dimension`, `score`, and `comment` fields.
+"""
+
 import json
 from pathlib import Path
 from openai import OpenAI
+from config.scoring.template_scoring_matrix import TEMPLATE_SCORING_MATRIX
 
 
 class PromptQualityAgent:
     def __init__(
         self,
         client: OpenAI,
-        evaluation_path: Path = Path("config/scoring/quality_scoring_matrix.json"),
+        evaluation_path: Path = Path("config/scoring/template_scoring_matrix.py"),
         creative_scoring: bool = False,
     ):
         self.client = client
@@ -16,15 +32,7 @@ class PromptQualityAgent:
         self.scoring_matrix = self._load_scoring_matrix()
 
     def _load_scoring_matrix(self):
-        try:
-            with open(self.evaluation_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return {
-                dim["dimension"]: dim["weight"] for dim in data.get("dimensions", [])
-            }
-        except Exception as e:
-            print(f"⚠️ Failed to load scoring matrix: {e}")
-            return {}
+        return TEMPLATE_SCORING_MATRIX
 
     def run(self, prompt_text: str, base_name: str, version: int):
         system_prompt = (
@@ -50,10 +58,8 @@ class PromptQualityAgent:
                 feedback = json.loads(raw_output)
                 break
             except json.JSONDecodeError as e:
-                # Optional: Log raw_output for debugging
                 if attempt == 2:
                     raise e
-                # Retry, modify system prompt to demand strictly valid JSON next time
                 system_prompt = "Previous output was invalid JSON. Please ONLY return valid JSON array."
 
         weighted_sum = 0.0
