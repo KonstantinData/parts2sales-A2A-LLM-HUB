@@ -1,91 +1,103 @@
-# prompt_improvement_agent.py
 """
-Prompt Improvement Agent (GPT-enhanced)
+PromptImprovementAgent
 
-Purpose:
---------
-Improves YAML-based LLM prompts based on structured feedback using OpenAI's GPT API.
+This agent receives a prompt and quality feedback, then generates an improved prompt
+(based on LLM or rule-based methods). Always returns a structured AgentEvent with ImprovementResult.
 
-Input:
+Notes:
 ------
-- original_prompt: str
-- feedback: dict (mit 'details', jedes mit 'dimension' und 'suggestion')
-
-Output:
--------
-- improved_prompt: str
-- rationale: str
+- Designed to be called in prompt improvement loops.
+- Uses OpenAI for LLM-based rewriting (can fallback to dummy-mode for testing).
+- All output is an AgentEvent (full audit trail, versioning, meta).
 """
 
-import json
-from typing import Tuple, Dict
-from openai import OpenAI
+from typing import Any, Dict
+from datetime import datetime
+from agents.utils.schemas import AgentEvent, ImprovementResult
 
 
 class PromptImprovementAgent:
-    def __init__(self, client: OpenAI, creative_mode: bool = False):
-        self.client = client
-        self.creative_mode = creative_mode
+    def __init__(
+        self,
+        openai_client,
+        agent_name="PromptImprovementAgent",
+        agent_version="1.0",
+        creative_mode=True,
+    ):
+        self.openai = openai_client
+        self.agent_name = agent_name
+        self.agent_version = agent_version
+        self.creative_mode = creative_mode  # Use LLM, or dummy mode
 
-    def run(self, original_prompt: str, feedback: Dict) -> Tuple[str, str]:
-        suggestions = feedback.get("details", [])
-        if not suggestions:
-            return (
-                original_prompt,
-                "No suggestions provided. Returning original prompt.",
+    def run(
+        self,
+        prompt_text: str,
+        quality_event: Dict[str, Any],
+        prompt_version: str = None,
+        meta: dict = None,
+        method: str = "llm",
+    ) -> AgentEvent:
+        """
+        Improve the given prompt based on quality feedback.
+        Returns an AgentEvent with ImprovementResult.
+        """
+        meta = meta or {}
+
+        if self.creative_mode and method == "llm":
+            improved_prompt, rationale, changes = self._improve_with_llm(
+                prompt_text, quality_event
+            )
+        else:
+            improved_prompt, rationale, changes = self._improve_dummy(
+                prompt_text, quality_event
             )
 
+        result = ImprovementResult(
+            improved_prompt=improved_prompt,
+            rationale=rationale,
+            changes=changes,
+            prompt_version=prompt_version,
+        )
+
+        event = AgentEvent(
+            event_type="prompt_improvement",
+            agent_name=self.agent_name,
+            agent_version=self.agent_version,
+            step_id=meta.get("step_id", ""),
+            prompt_version=prompt_version,
+            meta=meta,
+            payload=result.dict(),
+        )
+        return event
+
+    def _improve_with_llm(self, prompt_text, quality_event):
+        """
+        Uses OpenAI LLM to improve the prompt.
+        """
+        feedback = quality_event.get("feedback", "")
+        # Compose improvement instruction
         system_prompt = (
-            "You are an expert prompt engineer specializing in improving YAML-based LLM prompts. "
-            "Your goal is to comprehensively improve the prompt by addressing all feedback suggestions. "
-            "You may restructure, reword, and enhance clarity and effectiveness boldly."
+            "You are a prompt engineer. Rewrite the following prompt to maximize clarity, completeness, and instructional quality. "
+            "Incorporate this feedback for improvement: "
+            f"{feedback}\n\nPrompt:\n{prompt_text}\n\nReturn only the improved prompt text."
         )
-
-        if self.creative_mode:
-            system_prompt += (
-                " Apply advanced prompt engineering techniques. "
-                "Rewrite sections fully for better flow, precision, and impact. "
-                "Do not just add comments."
-            )
-
-        # Fasse Vorschläge kurz zusammen für das Modell
-        summarized_suggestions = []
-        for item in suggestions:
-            dim = item.get("dimension", "unknown")
-            sug = item.get("suggestion", "")
-            if sug:
-                summarized_suggestions.append(f"- {dim}: {sug}")
-
-        user_prompt = (
-            f"Feedback suggestions:\n" + "\n".join(summarized_suggestions) + "\n\n"
-            f"Original prompt (YAML):\n{original_prompt}\n\n"
-            f"Return only the improved YAML prompt, no explanations."
+        response = self.openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": system_prompt}],
+            max_tokens=800,
+            temperature=0.7,
         )
+        improved_prompt = response.choices[0].message.content.strip()
+        rationale = f"Improved per feedback: {feedback}"
+        changes = ["LLM rewrite", "Incorporated reviewer feedback"]
+        return improved_prompt, rationale, changes
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.6,
-                max_tokens=1500,
-            )
-            improved_prompt = response.choices[0].message.content.strip()
-
-            rationale = (
-                "Improvements applied addressing feedback dimensions: "
-                + ", ".join(
-                    [
-                        item.get("dimension", "unknown")
-                        for item in suggestions
-                        if item.get("suggestion")
-                    ]
-                )
-            )
-
-            return improved_prompt, rationale
-
-        except Exception as e:
-            return original_prompt, f"OpenAI API call failed: {e}"
+    def _improve_dummy(self, prompt_text, quality_event):
+        """
+        Dummy fallback: Append feedback to the prompt.
+        """
+        feedback = quality_event.get("feedback", "")
+        improved_prompt = prompt_text + "\n# Improvement:\n" + feedback
+        rationale = "Appended feedback as dummy improvement."
+        changes = ["Appended feedback"]
+        return improved_prompt, rationale, changes

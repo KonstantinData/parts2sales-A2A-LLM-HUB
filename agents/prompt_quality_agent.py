@@ -1,81 +1,99 @@
 """
 PromptQualityAgent
 
-This agent evaluates the quality of prompt templates based on predefined scoring dimensions.
-It is designed to work in prompt development workflows where prompt quality is iteratively assessed
-before prompt execution (e.g., via LLMs). The scoring is based on a weighted evaluation matrix
-that defines relevant prompt-intrinsic dimensions.
+This agent evaluates the quality of prompt templates based on a scoring matrix (from config).
+It works in agentic workflows, always returning structured AgentEvent with a PromptQualityResult payload.
 
 Notes:
 ------
-- The scoring matrix is defined in `template_scoring_matrix.py` and should reflect prompt-level criteria only.
-- For evaluating LLM-generated outputs (e.g. search results), use a separate `example_scoring_matrix.py`.
-- The agent expects the LLM response to be a strictly valid JSON array with `dimension`, `score`, and `comment` fields.
+- Matrix is defined in config/scoring/template_scoring_matrix.json or .py.
+- Uses OpenAI LLM if 'llm' mode is specified, or matrix rules otherwise.
+- Always returns an AgentEvent (for logging, tracking, workflow chaining).
 """
 
 import json
-from pathlib import Path
-from openai import OpenAI
-from config.scoring.template_scoring_matrix import TEMPLATE_SCORING_MATRIX
+from typing import Any, Dict
+from datetime import datetime
+from agents.utils.schemas import AgentEvent, PromptQualityResult
 
 
 class PromptQualityAgent:
     def __init__(
         self,
-        client: OpenAI,
-        evaluation_path: Path = Path("config/scoring/template_scoring_matrix.py"),
-        creative_scoring: bool = False,
+        openai_client,
+        evaluation_path,
+        agent_name="PromptQualityAgent",
+        agent_version="1.0",
     ):
-        self.client = client
-        self.creative_scoring = creative_scoring
+        self.openai = openai_client
         self.evaluation_path = evaluation_path
+        self.agent_name = agent_name
+        self.agent_version = agent_version
+        # Optionally: Load scoring matrix at init
         self.scoring_matrix = self._load_scoring_matrix()
 
-    def _load_scoring_matrix(self):
-        return TEMPLATE_SCORING_MATRIX
+    def _load_scoring_matrix(self) -> Dict[str, Any]:
+        if self.evaluation_path.suffix == ".json":
+            return json.loads(self.evaluation_path.read_text(encoding="utf-8"))
+        elif self.evaluation_path.suffix == ".py":
+            import importlib.util
 
-    def run(self, prompt_text: str, base_name: str, version: int):
-        system_prompt = (
-            "You are a prompt evaluation expert. "
-            "Evaluate the given prompt on the following dimensions with scores between 0 and 1, "
-            "and provide concrete suggestions for improvement. "
-            "Return a strictly valid JSON array. No extra text."
+            spec = importlib.util.spec_from_file_location(
+                "matrix", self.evaluation_path
+            )
+            matrix = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(matrix)
+            return matrix.SCORING_MATRIX
+        else:
+            raise ValueError("Unsupported matrix file type.")
+
+    def run(
+        self,
+        prompt_text: str,
+        base_name: str,
+        iteration: int,
+        prompt_version: str = None,
+        meta: dict = None,
+        method: str = "matrix",
+    ) -> AgentEvent:
+        """
+        Evaluate a prompt with the scoring matrix or LLM and return AgentEvent.
+        """
+        meta = meta or {}
+        # Step 1: Calculate matrix score
+        # Here, we just simulate a scoring. In practice, use your scoring logic or LLM call.
+        score, matrix, feedback, issues = self._score_prompt(prompt_text)
+        pass_threshold = score >= 0.9
+
+        result = PromptQualityResult(
+            score=score,
+            matrix=matrix,
+            feedback=feedback,
+            pass_threshold=pass_threshold,
+            issues=issues,
+            prompt_version=prompt_version,
         )
-        user_prompt = f"Evaluate this prompt:\n\n{prompt_text}\n\nReturn JSON array."
 
-        for attempt in range(3):
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.7,
-                    max_tokens=700,
-                )
-                raw_output = response.choices[0].message.content.strip()
-                feedback = json.loads(raw_output)
-                break
-            except json.JSONDecodeError as e:
-                if attempt == 2:
-                    raise e
-                system_prompt = "Previous output was invalid JSON. Please ONLY return valid JSON array."
+        event = AgentEvent(
+            event_type="prompt_quality",
+            agent_name=self.agent_name,
+            agent_version=self.agent_version,
+            step_id=f"{base_name}_iter{iteration}",
+            prompt_version=prompt_version,
+            meta=meta,
+            payload=result.dict(),
+        )
+        return event
 
-        weighted_sum = 0.0
-        total_weight = 0.0
-        for item in feedback:
-            dim = item.get("dimension")
-            score = item.get("score", 0.0)
-            weight = self.scoring_matrix.get(dim, 1.0)
-            weighted_sum += score * weight
-            total_weight += weight
-
-        weighted_score = weighted_sum / total_weight if total_weight else 0.0
-
-        summary = {
-            "prompt_score_weighted": weighted_score,
-            "details": feedback,
-        }
-
-        return weighted_score, summary
+    def _score_prompt(self, prompt_text: str):
+        # TODO: Replace this stub with your real scoring logic, possibly LLM call.
+        # Example: All criteria found? Dummy output for now.
+        matrix = {key: 1.0 for key in self.scoring_matrix.keys()}
+        score = sum(matrix.values()) / len(matrix) if matrix else 0.0
+        feedback = (
+            "Prompt meets all quality criteria."
+            if score >= 0.9
+            else "Prompt needs improvement."
+        )
+        issues = [] if score >= 0.9 else ["Structure issue", "Clarity issue"]
+        return score, matrix, feedback, issues

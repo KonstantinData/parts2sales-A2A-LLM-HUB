@@ -1,145 +1,81 @@
-# controller_agent.py
 """
-Controller Agent - Professional Version
+ControllerAgent
 
-Purpose:
---------
-- Validates if prompt improvements align with provided feedback using GPT-4.
-- Logs decisions with timestamp and explanations.
-- Controls retry logic with maximum retry limits.
-- Persistently tracks retry attempts based on saved logs.
+Agent to decide workflow actions based on event results.
+Evaluates if an improved prompt meets requirements, should retry, or aborts the loop.
+Always returns an AgentEvent with ControllerResult as payload.
+
+Notes:
+------
+- Alignment scoring may be rule-based or LLM-based (here: simple heuristic).
+- Used to control loop/retry logic in agentic prompt improvement workflows.
+- All workflow branching is centralized via this agent.
 """
 
-import json
-from pathlib import Path
-from datetime import datetime
-from openai import OpenAI
+from typing import Any, Dict
+from agents.utils.schemas import AgentEvent, ControllerResult
 
 
 class ControllerAgent:
-    def __init__(
+    def __init__(self, agent_name="ControllerAgent", agent_version="1.0"):
+        self.agent_name = agent_name
+        self.agent_version = agent_version
+
+    def run(
         self,
-        base_name: str,
-        version: int,
-        log_dir: Path,
-        client: OpenAI,
-        max_retries: int = 3,
-    ):
-        self.base_name = base_name
-        self.version = version
-        self.log_dir = log_dir
-        self.control_log_dir = log_dir / "control_log"
-        self.control_log_dir.mkdir(parents=True, exist_ok=True)
-
-        self.client = client
-        self.max_retries = max_retries
-
-        # Persistent retry count laden
-        self.retry_count = self._load_retry_count()
-
-    def _load_retry_count(self) -> int:
-        """Liest Control-Logs und zählt vorhandene Retries für diese Version."""
-        retry_count = 0
-        for file in self.control_log_dir.glob(
-            f"{self.base_name}_v{self.version}_*.json"
-        ):
-            try:
-                data = json.loads(file.read_text(encoding="utf-8"))
-                if data.get("retry_requested", False):
-                    retry_count += 1
-            except Exception:
-                continue
-        return retry_count
-
-    def check_alignment(self, prompt_text: str, feedback: dict) -> bool:
+        improved_prompt: str,
+        previous_feedback: Dict[str, Any],
+        prompt_version: str = None,
+        meta: dict = None,
+        method: str = "simple",
+    ) -> AgentEvent:
         """
-        Perform an alignment check by asking GPT-4 if the improved prompt
-        sufficiently addresses all feedback points.
-
-        Returns:
-            bool: True if aligned, False otherwise.
+        Decide workflow action based on improved prompt and feedback.
+        Returns an AgentEvent with ControllerResult.
         """
-        system_prompt = (
-            "You are a prompt evaluation expert. Given a prompt and feedback, "
-            "assess if the prompt improvements sufficiently address the feedback. "
-            "Respond succinctly with 'yes' or 'no', followed by a brief explanation."
+        meta = meta or {}
+
+        alignment_score, rationale = self._alignment_check(
+            improved_prompt, previous_feedback
         )
-        user_prompt = (
-            f"Improved Prompt:\n{prompt_text}\n\n"
-            f"Feedback:\n{json.dumps(feedback, indent=2)}\n\n"
-            "Does the improved prompt sufficiently address the feedback? "
-            "Answer with 'yes' or 'no' and provide a brief explanation."
+        # Simple rule: pass if score > 0.85, else retry, abort if score < 0.4
+        if alignment_score >= 0.85:
+            action = "pass"
+        elif alignment_score >= 0.4:
+            action = "retry"
+        else:
+            action = "abort"
+
+        result = ControllerResult(
+            action=action,
+            alignment_score=alignment_score,
+            rationale=rationale,
+            details={"meta": meta, "prompt_version": prompt_version},
         )
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.0,
-                max_tokens=150,
-            )
-            answer = response.choices[0].message.content.strip().lower()
-            aligned = answer.startswith("yes")
-
-            self._log_decision(aligned, answer)
-            return aligned
-
-        except Exception as e:
-            self._log_decision(
-                False, f"Alignment check failed due to API error: {str(e)}"
-            )
-            return False
-
-    def _log_decision(self, aligned: bool, explanation: str):
-        timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
-        log_data = {
-            "base_name": self.base_name,
-            "version": self.version,
-            "timestamp": timestamp,
-            "aligned": aligned,
-            "explanation": explanation,
-            "retry_requested": False,
-        }
-        log_path = (
-            self.control_log_dir / f"{self.base_name}_v{self.version}_{timestamp}.json"
+        event = AgentEvent(
+            event_type="controller_decision",
+            agent_name=self.agent_name,
+            agent_version=self.agent_version,
+            step_id=meta.get("step_id", ""),
+            prompt_version=prompt_version,
+            meta=meta,
+            payload=result.dict(),
         )
-        log_path.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
-        print(f"📝 Control log saved: {log_path.name}")
+        return event
 
-    def request_retry(self) -> bool:
+    def _alignment_check(self, improved_prompt: str, previous_feedback: Dict[str, Any]):
         """
-        Determines if a retry should be requested based on retry count and max limit.
-
-        Returns:
-            bool: True if retry allowed, False if max retries reached.
+        Dummy: Alignment score is high if feedback words are present in improved prompt.
         """
-        if self.retry_count >= self.max_retries:
-            print(
-                f"⚠️ Max retries ({self.max_retries}) reached for {self.base_name} v{self.version}."
-            )
-            return False
-
-        self.retry_count += 1
-        print(
-            f"🔁 Retry #{self.retry_count} requested for {self.base_name} v{self.version}."
-        )
-        # Log the retry request
-        timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
-        log_data = {
-            "base_name": self.base_name,
-            "version": self.version,
-            "timestamp": timestamp,
-            "retry_requested": True,
-            "retry_count": self.retry_count,
-        }
-        log_path = (
-            self.control_log_dir
-            / f"{self.base_name}_v{self.version}_retry_{timestamp}.json"
-        )
-        log_path.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
-        print(f"📝 Retry log saved: {log_path.name}")
-
-        return True
+        feedback = previous_feedback.get("feedback", "")
+        if not feedback:
+            return 1.0, "No feedback given; prompt passes by default."
+        # Check overlap (could use more advanced NLP/LLM)
+        present = sum(word in improved_prompt for word in feedback.split())
+        total = len(feedback.split())
+        if total == 0:
+            return 1.0, "No feedback to align with."
+        alignment_score = present / total
+        rationale = f"Alignment based on feedback keyword presence ({present}/{total})."
+        return alignment_score, rationale

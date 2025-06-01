@@ -1,35 +1,40 @@
+"""
+run_template_workflow.py
+
+Main runner for the agentic, event-driven prompt evaluation workflow.
+All agents return structured AgentEvent objects. All logs are event logs.
+Compatible with OpenAI and future agent plug-and-play.
+"""
+
 import os
 import sys
 import argparse
-import json
 import shutil
 from pathlib import Path
 from datetime import datetime
-import time
 from dotenv import load_dotenv
 from openai import OpenAI
-from utils.semantic_versioning_utils import bump
 
-# Load environment variables
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Dynamically add project root to sys.path
+# --- Dynamic root import fix ---
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Agent imports
-from agents.prompt_quality_agent import PromptQualityAgent
-from agents.prompt_improvement_agent import PromptImprovementAgent
+from agents.core.prompt_quality_agent import PromptQualityAgent
+from agents.core.prompt_improvement_agent import PromptImprovementAgent
 from agents.controller_agent import ControllerAgent
+from agents.utils.schemas import AgentEvent
+from agents.utils.event_logger import write_event_log
+from utils.semantic_versioning_utils import bump
 
-# Configuration
+# --- Config ---
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 TEMPLATE_DIR = ROOT / "prompts/00-templates"
 EXAMPLE_DIR = ROOT / "prompts/01-examples"
 LOG_DIR = ROOT / "logs"
-THRESHOLD = 0.90
-MAX_ITERATIONS = 3
+THRESHOLD = float(os.getenv("THRESHOLD", "0.90"))
+MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "3"))
 QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/template_scoring_matrix.json"
 
 
@@ -44,19 +49,16 @@ def replace_version_in_yaml(text: str, old: str, new: str) -> str:
     return text.replace(f"version: {old}", f"version: {new}")
 
 
-def write_log(category: str, name: str, data: dict):
-    timestamp = datetime.now().strftime("%y%m%d_%H%M")
-    path = LOG_DIR / category / f"{name}_{timestamp}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    print(f"📜 {category.upper()} log saved: {path.name}")
-
-
-def run_template_workflow(prompt_path: Path):
+def evaluate_and_improve_prompt(prompt_path: Path):
+    """
+    Core agentic evaluation-improvement workflow.
+    All agent returns, logs and state follow the event schema.
+    """
     quality_agent = PromptQualityAgent(
         client, evaluation_path=QUALITY_SCORING_MATRIX_PATH
     )
     improve_agent = PromptImprovementAgent(client, creative_mode=True)
+    controller_agent = ControllerAgent(client=client)
 
     current_path = prompt_path
     base_name = current_path.stem.replace("_v1", "")
@@ -69,15 +71,22 @@ def run_template_workflow(prompt_path: Path):
         )
         prompt_text = current_path.read_text(encoding="utf-8")
 
-        score, feedback = quality_agent.run(prompt_text, base_name, iteration)
-        write_log(
-            "prompt_log", f"{base_name}_v{semantic_version}", {"content": prompt_text}
+        # --- Evaluate Quality ---
+        pq_event = quality_agent.run(
+            prompt_text,
+            base_name,
+            iteration,
+            prompt_version=semantic_version,
+            meta={"file": str(current_path)},
         )
-        write_log("quality_log", f"{base_name}_v{semantic_version}", feedback)
-        write_log(
-            "weighted_score", f"{base_name}_v{semantic_version}", {"score": score}
-        )
+        write_event_log(LOG_DIR, pq_event)
 
+        pq_result = pq_event.payload
+        score = pq_result.get("score", 0.0)
+        pass_threshold = pq_result.get("pass_threshold", False)
+        feedback = pq_result.get("feedback", "")
+
+        # --- If threshold met: save versioned example and stop ---
         if score >= THRESHOLD:
             EXAMPLE_DIR.mkdir(parents=True, exist_ok=True)
             final_path = EXAMPLE_DIR / f"{base_name}_example_v{semantic_version}.yaml"
@@ -89,50 +98,57 @@ def run_template_workflow(prompt_path: Path):
             print("⛔️ Max iterations reached. Aborting.")
             break
 
-        improved_text, rationale = improve_agent.run(prompt_text, feedback)
+        # --- Improve Prompt ---
+        imp_event = improve_agent.run(
+            prompt_text,
+            feedback,
+            base_name=base_name,
+            iteration=iteration,
+            prompt_version=semantic_version,
+        )
+        write_event_log(LOG_DIR, imp_event)
+        improved_prompt = imp_event.payload.get("improved_prompt", "")
+        rationale = imp_event.payload.get("rationale", "")
+
+        # --- Version bump for new template ---
         next_version = bump(semantic_version, mode="patch")
-        improved_text = replace_version_in_yaml(
-            improved_text, semantic_version, next_version
+        improved_prompt = replace_version_in_yaml(
+            improved_prompt, semantic_version, next_version
         )
-
         next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
-        next_prompt_path.write_text(improved_text)
+        next_prompt_path.write_text(improved_prompt)
 
-        write_log(
-            "prompt_log", f"{base_name}_v{next_version}", {"content": improved_text}
+        # --- Controller Agent: alignment check ---
+        ctrl_event = controller_agent.run(
+            improved_prompt,
+            feedback,
+            base_name=base_name,
+            iteration=iteration,
+            prompt_version=next_version,
         )
-        write_log("feedback_log", f"{base_name}_v{next_version}", feedback)
-        write_log(
-            "change_log",
-            f"{base_name}_v{semantic_version}_to_v{next_version}",
-            {
-                "version_from": semantic_version,
-                "version_to": next_version,
-                "timestamp": datetime.now().isoformat(),
-                "diff_text": {"before": prompt_text, "after": improved_text},
-                "rationale": rationale,
-            },
-        )
+        write_event_log(LOG_DIR, ctrl_event)
+        action = ctrl_event.payload.get("action", "")
+        if action == "retry":
+            print("🔄 Controller requests retry.")
+            current_path = next_prompt_path
+            semantic_version = next_version
+            continue
+        elif action == "abort":
+            print("❌ Controller aborts. No further improvement.")
+            break
 
-        controller = ControllerAgent(base_name, iteration, LOG_DIR, client)
-        if not controller.check_alignment(improved_text, feedback):
-            if controller.request_retry():
-                time.sleep(1)
-                continue
-            else:
-                print("❌ Retry failed or limit reached. Aborting.")
-                break
-
+        # --- Next round with improved prompt ---
         current_path = next_prompt_path
         semantic_version = next_version
-        time.sleep(1)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prompt Template Evaluator & Improver")
+    parser = argparse.ArgumentParser(
+        description="Agentic Prompt Template Workflow Runner"
+    )
     parser.add_argument("--file", type=str, help="Path to the prompt file")
     parser.add_argument(
-        "--all", action="store_true", help="Check all predefined templates"
+        "--all", action="store_true", help="Process all templates in directory"
     )
     args = parser.parse_args()
 
@@ -141,9 +157,9 @@ def main():
             print(f"⚠️ Directory {TEMPLATE_DIR} not found.")
             return
         for prompt_file in TEMPLATE_DIR.glob("*.yaml"):
-            run_template_workflow(prompt_file)
+            evaluate_and_improve_prompt(prompt_file)
     elif args.file:
-        run_template_workflow(Path(args.file))
+        evaluate_and_improve_prompt(Path(args.file))
     else:
         print("⚠️ Please provide either --file <path> or --all.")
 
