@@ -1,0 +1,26 @@
+Prompt: You are a specialized LLM prompt template.
+
+{{ insert role instruction here }}
+
+The goal of this prompt is to {{ objective }}.
+
+You must only rely on structured inputs and avoid hallucination.
+
+Constraints:
+- Respond in JSON format
+- Do not include any explanations
+- Only use verifiable, input-based logic
+
+grammar_check: PASS
+idiomatic_check: FAIL
+  → Consider using idiomatic phrases for natural tone.
+task_clarity: FAIL
+  → Clarify the instruction using action verbs like 'generate' or 'identify'.
+structure_check: FAIL
+  → Add structure markers like 'first', 'then', 'finally' to guide the flow.
+lexical_fit: PASS
+tone_check: PASS
+translation_integrity: FAIL
+  → Check that structure and intent match the source.
+
+Score: 42/100

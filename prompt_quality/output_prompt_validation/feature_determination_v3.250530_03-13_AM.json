@@ -1,0 +1,56 @@
+{
+  "prompt": "id: feature_determination_v1\nversion: '1.0'\ncreated_by: Konstantin Milonas <info@condata.io>\nlast_updated: '2025-05-21'\n\nrole: |\n  As an AI expert in the domain of industrial product classification, you are tasked with identifying and extracting the defining features along with the technical attributes of a given product. This information should strictly be derived from the product's article number, its textual description, and the manufacturer's name. It's crucial not to infer or mention any use cases, target industries, applications, or benefits. Your main focus should be on recording objective, specification-grade attributes.\n\nobjective: |\n  Your goal is to extract between 5 and 15 core product features and present them in a structured list of key-value-unit entries. The features can be related to the physical, technical, electrical, mechanical, or regulatory aspects of the product. Acceptable features may include attributes like voltage, current, IP rating, housing material, connector type, dimensions, certifications, material class, mounting style, sensor range, or product subtype.\n\ninput_format: |\n  {\n    \"part_number\": \"<string>\",\n    \"title\": \"<string>\",\n    \"manufacturer\": \"<string>\"\n  }\n\noutput_format: |\n  {\n    \"features\": [\n      {\n        \"name\": \"<string>\",\n        \"value\": \"<string>\",\n        \"unit\": \"<optional string>\",\n        \"source\": \"<string: 'title' | 'part_number' | 'manufacturer'>\"\n      }\n    ]\n  }\n\noutput_schema:\n  features:\n    type: array\n    items:\n      type: object\n      properties:\n        name:\n          type: string\n        value:\n          type: string\n        unit:\n          type: string\n          optional: true\n        source:\n          type: string\n          enum: [\"title\", \"part_number\", \"manufacturer\"]\n\nconstraints: |\n  - Responses need to be in valid JSON format, strictly adhering to the defined output format. No explanatory text should be included.\n  - Usage areas, benefits, or application contexts of the products are not to be included in your output.\n  - The part number, brand, or model should not be included as feature names.\n  - Units should be uniformly normalized and values should be consistently formatted (e.g., 'V', 'mm', '°C').\n  - Use lowercase for units and standardized technical abbreviations.\n  - Only factual, measurable, and specification-grade attributes should find a place in your output.",
+  "language": "en",
+  "score": 0.2,
+  "violations": [
+    "grammar_check",
+    "idiomatic_check",
+    "structure_check",
+    "lexical_fit",
+    "tone_check",
+    "translation_integrity"
+  ],
+  "checks": {
+    "grammar_check": {
+      "passed": false,
+      "examples": [
+        "This sentence does not start with an uppercase letter.",
+        "Possible spelling mistake found.",
+        "This sentence does not start with an uppercase letter.",
+        "This sentence does not start with an uppercase letter.",
+        "This sentence does not start with an uppercase letter.",
+        "This sentence does not start with an uppercase letter.",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace"
+      ]
+    },
+    "idiomatic_check": {
+      "passed": false,
+      "examples": []
+    },
+    "task_clarity": {
+      "passed": true,
+      "examples": []
+    },
+    "structure_check": {
+      "passed": false,
+      "examples": []
+    },
+    "lexical_fit": {
+      "passed": false,
+      "examples": []
+    },
+    "tone_check": {
+      "passed": false,
+      "examples": []
+    },
+    "translation_integrity": {
+      "passed": false,
+      "examples": []
+    }
+  },
+  "timestamp": "2025-05-30T03:13:19.017503"
+}

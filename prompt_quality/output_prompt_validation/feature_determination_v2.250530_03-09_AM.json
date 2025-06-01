@@ -1,0 +1,58 @@
+{
+  "prompt": "```yaml\nid: feature_determination_v1\nversion: '1.0'\ncreator: Konstantin Milonas <info@condata.io>\nlast_updated: '2025-05-21'\n\nrole: |\n  As an autonomous AI with expertise in industrial product classification, your task involves the identification and extraction of the defining features and technical attributes of a product. This should be based on the product's part number, title, and manufacturer. \n\n  Note: The extraction should be solely focused on objective, quantitative, specification-level attributes. Refrain from any inference or mention of use cases, target industries, applications, or benefits.\n\nobjective: |\n  The goal is to extract between 5 and 15 core features reflecting physical, technical, electrical, mechanical, or regulatory properties of the product into a structured list of key-value-unit entries. \n  Examples of acceptable features comprise voltage, current, IP rating, housing material, connector type, dimensions, certifications, material class, mounting style, sensor range, and product subtype, among others.\n\ninput_format: |\n  {\n    \"part_number\": \"<string>\",\n    \"title\": \"<string>\",\n    \"manufacturer\": \"<string>\"\n  }\n\noutput_format: |\n  {\n    \"features\": [\n      {\n        \"name\": \"<string>\",\n        \"value\": \"<string>\",\n        \"unit\": \"<optional string>\",\n        \"source\": \"<'title' | 'part_number' | 'manufacturer'>\"\n      }\n    ]\n  }\n\noutput_schema:\n  features:\n    type: list\n    items:\n      type: object\n      properties:\n        name:\n          type: string\n        value:\n          type: string\n        unit:\n          type: string\n          required: false\n        source:\n          type: string\n          enum: [\"title\", \"part_number\", \"manufacturer\"]\n\nconstraints:\n  - Provide response as valid JSON that strictly conforms to the output schema (no additional explanatory text).\n  - Exclude any mention of use cases, benefits, or application contexts.\n  - Avoid restating the part number, brand, or model as feature names.\n  - Ensure normalization and consistency in units and formatted values (e.g., 'V', 'mm', '°C').\n  - Maintain lowercase for units and commercial technical abbreviations.\n  - Incorporate only factual, measurable, and specification-grade attributes.\n```",
+  "language": "en",
+  "score": 0.0,
+  "violations": [
+    "grammar_check",
+    "idiomatic_check",
+    "task_clarity",
+    "structure_check",
+    "lexical_fit",
+    "tone_check",
+    "translation_integrity"
+  ],
+  "checks": {
+    "grammar_check": {
+      "passed": false,
+      "examples": [
+        "This abbreviation for “identification” is spelled all-uppercase.",
+        "Possible spelling mistake found.",
+        "This sentence does not start with an uppercase letter.",
+        "Possible typo: you repeated a whitespace",
+        "This sentence does not start with an uppercase letter.",
+        "This sentence does not start with an uppercase letter.",
+        "This sentence does not start with an uppercase letter.",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace",
+        "Possible typo: you repeated a whitespace"
+      ]
+    },
+    "idiomatic_check": {
+      "passed": false,
+      "examples": []
+    },
+    "task_clarity": {
+      "passed": false,
+      "examples": []
+    },
+    "structure_check": {
+      "passed": false,
+      "examples": []
+    },
+    "lexical_fit": {
+      "passed": false,
+      "examples": []
+    },
+    "tone_check": {
+      "passed": false,
+      "examples": []
+    },
+    "translation_integrity": {
+      "passed": false,
+      "examples": []
+    }
+  },
+  "timestamp": "2025-05-30T03:09:52.737524"
+}
