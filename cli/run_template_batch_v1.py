@@ -1,3 +1,10 @@
+# run_template_batch.py
+"""
+Main batch runner for evaluating and improving YAML prompt templates.
+
+This script supports Semantic Versioning (SemVer) for prompt file versions.
+"""
+
 import os
 import sys
 import argparse
@@ -8,7 +15,6 @@ from datetime import datetime
 import time
 from dotenv import load_dotenv
 from openai import OpenAI
-from utils.semantic_versioning_utils import bump
 
 # Load environment variables
 load_dotenv()
@@ -34,14 +40,11 @@ QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/template_scoring_matrix.jso
 
 
 def parse_version_from_yaml(path: Path) -> str:
+    """Extract semantic version from YAML if available."""
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip().startswith("version:"):
             return line.split(":", 1)[1].strip()
     return "0.1.0"
-
-
-def replace_version_in_yaml(text: str, old: str, new: str) -> str:
-    return text.replace(f"version: {old}", f"version: {new}")
 
 
 def write_log(category: str, name: str, data: dict):
@@ -60,23 +63,17 @@ def run_template_workflow(prompt_path: Path):
 
     current_path = prompt_path
     base_name = current_path.stem.replace("_v1", "")
+    version = 1
     semantic_version = parse_version_from_yaml(current_path)
-    original_version = semantic_version
 
-    for iteration in range(1, MAX_ITERATIONS + 1):
-        print(
-            f"🔍 Processing {current_path.name} (iteration {iteration} | version {semantic_version})"
-        )
+    while version <= MAX_ITERATIONS:
+        print(f"\n🔍 Processing {current_path.name} (v{version} | {semantic_version})")
         prompt_text = current_path.read_text(encoding="utf-8")
 
-        score, feedback = quality_agent.run(prompt_text, base_name, iteration)
-        write_log(
-            "prompt_log", f"{base_name}_v{semantic_version}", {"content": prompt_text}
-        )
-        write_log("quality_log", f"{base_name}_v{semantic_version}", feedback)
-        write_log(
-            "weighted_score", f"{base_name}_v{semantic_version}", {"score": score}
-        )
+        score, feedback = quality_agent.run(prompt_text, base_name, version)
+        write_log("prompt_log", f"{base_name}_v{version}", {"content": prompt_text})
+        write_log("quality_log", f"{base_name}_v{version}", feedback)
+        write_log("weighted_score", f"{base_name}_v{version}", {"score": score})
 
         if score >= THRESHOLD:
             EXAMPLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -85,16 +82,12 @@ def run_template_workflow(prompt_path: Path):
             print(f"✅ Threshold met. Saved as: {final_path}")
             break
 
-        if iteration == MAX_ITERATIONS:
+        if version == MAX_ITERATIONS:
             print("⛔️ Max iterations reached. Aborting.")
             break
 
         improved_text, rationale = improve_agent.run(prompt_text, feedback)
-        next_version = bump(semantic_version, mode="patch")
-        improved_text = replace_version_in_yaml(
-            improved_text, semantic_version, next_version
-        )
-
+        next_version = version + 1
         next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
         next_prompt_path.write_text(improved_text)
 
@@ -104,17 +97,17 @@ def run_template_workflow(prompt_path: Path):
         write_log("feedback_log", f"{base_name}_v{next_version}", feedback)
         write_log(
             "change_log",
-            f"{base_name}_v{semantic_version}_to_v{next_version}",
+            f"{base_name}_v{version}_to_v{next_version}",
             {
-                "version_from": semantic_version,
-                "version_to": next_version,
+                "version_from": f"v{version}",
+                "version_to": f"v{next_version}",
                 "timestamp": datetime.now().isoformat(),
                 "diff_text": {"before": prompt_text, "after": improved_text},
                 "rationale": rationale,
             },
         )
 
-        controller = ControllerAgent(base_name, iteration, LOG_DIR, client)
+        controller = ControllerAgent(base_name, version, LOG_DIR, client)
         if not controller.check_alignment(improved_text, feedback):
             if controller.request_retry():
                 time.sleep(1)
@@ -124,7 +117,7 @@ def run_template_workflow(prompt_path: Path):
                 break
 
         current_path = next_prompt_path
-        semantic_version = next_version
+        version += 1
         time.sleep(1)
 
 
