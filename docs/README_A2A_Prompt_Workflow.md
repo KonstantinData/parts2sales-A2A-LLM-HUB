@@ -2,70 +2,74 @@
 
 ## Project Structure
 
-```
-.
-├── 00-structure/              # Raw structured prompt blueprints
-├── 01-research/               # Evaluation-ready drafts/templates from raw files
-├── 02-laboratory/             # Post-evaluation optimization experiments
-├── 03-production/             # Validated and system-integrated prompts
-├── config/                    # Configuration files for scoring and templates
-├── logs/                      # All generated logs (prompt, quality, feedback, etc.)
-├── prompts/                   # Entry folder for structured YAML prompts
-└── cli/                       # CLI scripts to automate workflows
-```
+├── 00-templates/             # Raw structured prompt blueprints (multiple layers by feature)
+
+├── 01-examples/              # Evaluation-ready drafts/templates from raw files
+
+├── 02-production/            # Validated and system-integrated production prompts
+
+├── config/                   # Configuration files for scoring matrices and parameters
+
+├── logs/                     # All generated logs (prompt, quality, feedback, etc.)
+
+├── prompts/                  # Entry point folder for structured YAML prompts
+
+├── cli/                      # CLI scripts to automate workflows
+
+└── agents/                   # Agent implementations and core logic
+
 
 ## Naming Convention & Semantic Versioning
 
-All prompt files follow this semantic versioning and suffix convention:
+All prompt files follow this strict semantic versioning and suffix convention for clarity, traceability, and staging:
 
-- `*_raw_v1.yaml` – untested structural base
-- `*_templ_v1.yaml` – formatted and draft-ready
-- `*_config_v1.yaml` – tested and refined via lab
-- `*_active_v1.yaml` – in-use production prompt
+| Stage    | Filename Pattern         | Meaning                       |
+| -------- | ------------------------ | ----------------------------- |
+| Raw      | `*_raw_vX.Y.Z.yaml`    | Untested structural base      |
+| Template | `*_templ_vX.Y.Z.yaml`  | Formatted and draft-ready     |
+| Config   | `*_config_vX.Y.Z.yaml` | Tested and refined in lab     |
+| Active   | `*_active_vX.Y.Z.yaml` | Production ready and deployed |
 
-**Examples:**
+### Versioning
 
-| Purpose                 | Filename Example                  |
-| ----------------------- | --------------------------------- |
-| Company assignment      | `company_assign_raw_v1.yaml`    |
-| Contact assignment      | `contact_assign_templ_v2.yaml`  |
-| Feature setup           | `feature_setup_active_v3.yaml`  |
-| Industry classification | `industry_class_config_v2.yaml` |
-| Use case detection      | `usecase_detect_active_v1.yaml` |
+The `version:` field inside YAML prompts and filenames uses semantic versioning:
 
-Semantic Versioning used in `version:` field and filenames:
+| Version | Meaning                           |
+| ------- | --------------------------------- |
+| 0.x.y   | Experimental or beta phase        |
+| 1.0.0   | First stable production release   |
+| 1.x.y   | Backwards-compatible feature/fix  |
+| 2.0.0   | Major redesign / breaking changes |
 
-| SemVer | Meaning                           |
-| ------ | --------------------------------- |
-| 0.x.y  | Experimental or beta phase        |
-| 1.0.0  | First stable production release   |
-| 1.x.y  | Backwards-compatible feature/fix  |
-| 2.0.0  | Major redesign / breaking changes |
+### Examples
+
+| Use Case                | Example Filename                      |
+| ----------------------- | ------------------------------------- |
+| Company assignment      | `company_assign_raw_v0.1.0.yaml`    |
+| Contact assignment      | `contact_assign_templ_v0.2.0.yaml`  |
+| Feature setup           | `feature_setup_active_v1.0.0.yaml`  |
+| Industry classification | `industry_class_config_v0.3.0.yaml` |
+| Use case detection      | `usecase_detect_active_v1.0.0.yaml` |
 
 ## Workflow Description
 
-The workflow proceeds as follows:
+This prompt development workflow supports iterative evaluation and improvement with clear audit trails:
 
-1. **Start Event**
-2. **Read Prompt V1 File**
-3. **Write Prompt Log (v1)**
-4. **Run PromptQualityAgent**
-5. **Write Quality Log**
-6. **Write Weighted Score Log**
-7. **Evaluate Score ≥ Threshold?**
-   - If yes → Save Final Prompt to `01-research`
-   - If no  → Run PromptImprovementAgent
-8. **Write Improved Prompt**
-9. **Log Prompt (v2)**
-10. **Write Feedback Log**
-11. **Write Change Log**
-12. **Run ControllerAgent**
-13. **Check Alignment**
-    - If aligned → loop back to quality check
-    - If not aligned → retry up to limit
-14. **Abort if retries exceed limit**
+1. **Start with a Raw prompt file** (`*_raw_vX.Y.Z.yaml`)
+2. **Log initial prompt state**
+3. **Run `PromptQualityAgent` to evaluate prompt quality**
+4. **Write quality and weighted score logs**
+5. **Evaluate if score meets the threshold**
+   - If yes, save prompt as `*_config_vX.Y.Z.yaml` in `01-examples/`
+   - If no, run `PromptImprovementAgent` to create improved prompt
+6. **Log improved prompt and feedback**
+7. **Run `ControllerAgent` for alignment and decision**
+8. **Repeat improvement loop up to max iterations or until aligned**
+9. **When stable, move prompt to `*_active_vX.Y.Z.yaml` in `02-production/`**
 
-All intermediate logs are saved under `/logs`. Each versioned improvement produces:
+### Logging
+
+All intermediate states are logged in `/logs/` under these categories:
 
 - `prompt_log/`
 - `quality_log/`
@@ -73,22 +77,27 @@ All intermediate logs are saved under `/logs`. Each versioned improvement produc
 - `change_log/`
 - `weighted_score/`
 
+Each log entry is a fully validated JSON event for traceability and monitoring.
+
 ## Best Practices
 
-- Use **snake_case** and **lowercase** in filenames.
-- Avoid whitespace and special characters.
-- Archive old logs if not used.
-- YAML templates must remain valid and version-controlled.
-- Keep `config/` versioned for scoring consistency.
+- Use consistent **snake_case** and lowercase for filenames.
+- Avoid whitespaces or special characters in filenames.
+- Keep YAML templates valid and under version control.
+- Archive old logs regularly to maintain performance.
+- Keep scoring and configuration files versioned in `config/`.
+- Ensure prompt versions inside files and filenames always match.
 
 ## Deployment Targets
 
-Production prompts from `03-production/` may be deployed via:
+Production prompts (`*_active_vX.Y.Z.yaml`) are ready for deployment to:
 
-- **AWS App Runner**
-- **Docker Container Services**
-- **S3 Buckets or API Gateways**
+- AWS App Runner, Docker, or container orchestration platforms
+- Static S3 buckets or API gateway endpoints for retrieval
+- Integration pipelines with CRM or third-party APIs
 
 ---
 
-> This repo is structured to support scalable, iterative LLM prompt development with high reproducibility and log traceability.
+> This repo and workflow enable scalable, traceable, and iterative prompt engineering to support enterprise-grade AI applications with full version control, logging, and auditability.
+
+---

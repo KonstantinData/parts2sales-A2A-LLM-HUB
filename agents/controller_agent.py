@@ -1,10 +1,12 @@
 """
-ControllerAgent
+agents/controller_agent.py
 
-Controls the improvement workflow by deciding whether to retry, continue, or abort
-based on the improved prompt and feedback.
-Always returns structured AgentEvent objects.
-Ready for plug-and-play extension.
+Controller agent for decision making in prompt workflows.
+Analyzes improvement feedback and decides on retry or abort.
+
+# Notes:
+- Returns structured AgentEvent with action payload.
+- Designed for pluggable decision logic.
 """
 
 from agents.utils.schemas import AgentEvent
@@ -23,35 +25,19 @@ class ControllerAgent:
 
     def run(
         self,
-        improved_prompt: str,
+        prompt_text: str,
         feedback: str,
         base_name: str,
         iteration: int,
         prompt_version: str = None,
         meta: dict = None,
     ) -> AgentEvent:
-        """
-        Decide next action based on improved prompt and feedback.
-        Returns AgentEvent with action in payload: 'retry', 'continue', or 'abort'.
-        """
         meta = meta or {}
 
-        # Simple logic: if "IMPROVED" is present and iteration < 3, retry once, then continue.
-        if "IMPROVED" in improved_prompt and iteration < 2:
-            action = "retry"
-            rationale = "Requesting another improvement iteration."
-        elif iteration >= 3:
-            action = "abort"
-            rationale = "Max iterations reached."
-        else:
-            action = "continue"
-            rationale = "Prompt meets minimal improvement criteria."
+        # Simple heuristic: retry if feedback contains "improvement"
+        action = "retry" if "improvement" in feedback.lower() else "abort"
 
-        payload = {
-            "action": action,
-            "rationale": rationale,
-            "prompt_version": prompt_version,
-        }
+        payload = {"action": action}
 
         event = AgentEvent(
             event_type="controller_decision",

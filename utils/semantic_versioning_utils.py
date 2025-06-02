@@ -1,24 +1,31 @@
+"""
+Semantic Versioning Utilities
 
-from packaging.version import Version
+Functions for parsing and bumping semantic versions following X.Y.Z pattern.
+"""
 
-def bump_patch(version_str: str) -> str:
-    v = Version(version_str)
-    return f"{v.major}.{v.minor}.{v.micro + 1}"
+import re
 
-def bump_minor(version_str: str) -> str:
-    v = Version(version_str)
-    return f"{v.major}.{v.minor + 1}.0"
+SEMVER_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
-def bump_major(version_str: str) -> str:
-    v = Version(version_str)
-    return f"{v.major + 1}.0.0"
 
-def bump(version_str: str, mode: str = "patch") -> str:
-    if mode == "patch":
-        return bump_patch(version_str)
+def bump(version: str, mode: str = "patch") -> str:
+    match = SEMVER_PATTERN.search(version)
+    if not match:
+        major, minor, patch = 0, 1, 0
+    else:
+        major, minor, patch = map(int, match.groups())
+
+    if mode == "major":
+        major += 1
+        minor = 0
+        patch = 0
     elif mode == "minor":
-        return bump_minor(version_str)
-    elif mode == "major":
-        return bump_major(version_str)
+        minor += 1
+        patch = 0
+    elif mode == "patch":
+        patch += 1
     else:
         raise ValueError(f"Unknown bump mode: {mode}")
+
+    return f"{major}.{minor}.{patch}"

@@ -1,15 +1,12 @@
 """
 Template Scoring Matrix
 
-This module defines the evaluation dimensions and weights used to assess the quality of prompt templates
-*prior* to their execution. The scoring focuses exclusively on aspects intrinsic to the prompt structure,
-clarity, and alignment – not on the quality of generated results.
+Defines evaluation criteria and weights for prompt templates prior to execution.
+Focuses on prompt clarity, structure, constraints, reasoning, and user alignment.
 
 Usage:
-- Imported by agents responsible for evaluating prompt formulations.
-- Intended for use in workflows that improve prompt instructions iteratively.
-- Should be kept separate from scoring schemes that evaluate LLM-generated outputs (e.g., `example_scoring_matrix.py`).
-
+- Used by PromptQualityAgent when scoring template stage prompts.
+- Separate from scoring schemes that evaluate LLM output quality.
 """
 
 TEMPLATE_SCORING_MATRIX = {

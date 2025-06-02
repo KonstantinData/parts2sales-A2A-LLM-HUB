@@ -1,9 +1,14 @@
-"""
-run_template_batch_latest.py
+# File: cli/run_template_batch_latest.py
 
+"""
 Main runner for the agentic, event-driven prompt evaluation workflow.
-All agents return structured AgentEvent objects. All logs are event logs.
-Compatible with OpenAI and future agent plug-and-play.
+Handles versioning and saving of prompts according to strict naming conventions.
+
+# Notes:
+- Saves 'config' versions in prompts/01-examples/{process}/ with name pattern: {process}_config_v{version}.yaml
+- Saves 'template' versions in prompts/00-templates/{process}/{process}_template/ with name pattern: {process}_template_v{version}.yaml
+- Strips any 'raw' or earlier version prefixes from base names before saving.
+- Fully compatible with semantic versioning per project guidelines.
 """
 
 import os
@@ -15,7 +20,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# --- Dynamic root import fix ---
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -27,21 +31,23 @@ from agents.utils.schemas import AgentEvent
 from agents.utils.event_logger import write_event_log
 from utils.semantic_versioning_utils import bump
 
-# --- Config ---
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-TEMPLATE_DIR = ROOT / "prompts/00-templates"
-EXAMPLE_DIR = ROOT / "prompts/01-examples"
+
+TEMPLATE_DIR = ROOT / "prompts" / "00-templates"
+EXAMPLE_DIR = ROOT / "prompts" / "01-examples"
 LOG_DIR = ROOT / "logs"
 THRESHOLD = float(os.getenv("THRESHOLD", "0.90"))
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "3"))
+QUALITY_SCORING_MATRIX_NAME = (
+    "template"  # Use 'template' scoring matrix for this process
+)
 
 
 def parse_version_from_yaml(path: Path) -> str:
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip().startswith("version:"):
-            version = line.split(":", 1)[1].strip()
-            return version.strip("'\"")
+            return line.split(":", 1)[1].strip().strip("'\"")
     return "0.1.0"
 
 
@@ -49,17 +55,34 @@ def replace_version_in_yaml(text: str, old: str, new: str) -> str:
     return text.replace(f"version: {old}", f"version: {new}")
 
 
+def clean_base_name(name: str) -> str:
+    """
+    Remove known prefixes like 'raw_' or version suffixes from the base name to
+    get the process name for correct naming.
+    """
+    # Remove any '_raw' or similar suffixes
+    for prefix in ["_raw", "_templ", "_config", "_active"]:
+        if prefix in name:
+            name = name.replace(prefix, "")
+    # Also strip trailing version like _v0.1.0 if present
+    import re
+
+    name = re.sub(r"_v\d+(\.\d+)*$", "", name)
+    return name
+
+
 def evaluate_and_improve_prompt(prompt_path: Path):
     quality_agent = PromptQualityAgent(
-        openai_client=client, scoring_matrix_name="template"
+        openai_client=client, scoring_matrix_name=QUALITY_SCORING_MATRIX_NAME
     )
     improve_agent = PromptImprovementAgent()
     controller_agent = ControllerAgent(client=client)
 
     current_path = prompt_path
-    base_name = current_path.stem.replace("_v1", "")
+    raw_base_name = current_path.stem
     semantic_version = parse_version_from_yaml(current_path)
-    original_version = semantic_version
+
+    base_name = clean_base_name(raw_base_name)  # e.g. 'feature_setup'
 
     for iteration in range(1, MAX_ITERATIONS + 1):
         print(
@@ -67,7 +90,7 @@ def evaluate_and_improve_prompt(prompt_path: Path):
         )
         prompt_text = current_path.read_text(encoding="utf-8")
 
-        # --- Evaluate Quality ---
+        # Evaluate prompt quality
         pq_event = quality_agent.run(
             prompt_text,
             base_name,
@@ -82,19 +105,37 @@ def evaluate_and_improve_prompt(prompt_path: Path):
         pass_threshold = pq_result.get("pass_threshold", False)
         feedback = pq_result.get("feedback", "")
 
-        # --- If threshold met: save versioned example and stop ---
+        # If threshold met: save config and template files and exit loop
         if score >= THRESHOLD:
-            EXAMPLE_DIR.mkdir(parents=True, exist_ok=True)
-            final_path = EXAMPLE_DIR / f"{base_name}_example_v{semantic_version}.yaml"
-            shutil.copyfile(current_path, final_path)
-            print(f"✅ Threshold met. Saved as: {final_path}")
+            # Save config version to examples
+            config_dir = EXAMPLE_DIR / base_name
+            config_dir.mkdir(parents=True, exist_ok=True)
+            config_version = "0.3.0"  # Fixed config version per lab conventions
+            config_filename = f"{base_name}_config_v{config_version}.yaml"
+            config_path = config_dir / config_filename
+            shutil.copyfile(current_path, config_path)
+            print(f"✅ Threshold met. Saved config as: {config_path}")
+
+            # Save template version to templates
+            template_dir = TEMPLATE_DIR / base_name / f"{base_name}_template"
+            template_dir.mkdir(parents=True, exist_ok=True)
+            template_version = "1.0.0"
+            template_filename = f"{base_name}_template_v{template_version}.yaml"
+            template_path = template_dir / template_filename
+            # Write current prompt text to template path (with updated version)
+            template_text = replace_version_in_yaml(
+                prompt_text, semantic_version, template_version
+            )
+            template_path.write_text(template_text, encoding="utf-8")
+            print(f"📄 Template saved as: {template_path}")
+
             break
 
         if iteration == MAX_ITERATIONS:
             print("⛔️ Max iterations reached. Aborting.")
             break
 
-        # --- Improve Prompt ---
+        # Improve prompt
         imp_event = improve_agent.run(
             prompt_text,
             feedback,
@@ -103,18 +144,19 @@ def evaluate_and_improve_prompt(prompt_path: Path):
             prompt_version=semantic_version,
         )
         write_event_log(LOG_DIR, imp_event)
+
         improved_prompt = imp_event.payload.get("improved_prompt", "")
         rationale = imp_event.payload.get("rationale", "")
 
-        # --- Version bump for new template ---
+        # Version bump for new template version
         next_version = bump(semantic_version, mode="patch")
         improved_prompt = replace_version_in_yaml(
             improved_prompt, semantic_version, next_version
         )
-        next_prompt_path = TEMPLATE_DIR / f"{base_name}_v{next_version}.yaml"
-        next_prompt_path.write_text(improved_prompt)
+        next_prompt_path = current_path.parent / f"{base_name}_v{next_version}.yaml"
+        next_prompt_path.write_text(improved_prompt, encoding="utf-8")
 
-        # --- Controller Agent: alignment check ---
+        # Controller alignment check
         ctrl_event = controller_agent.run(
             improved_prompt,
             feedback,
@@ -123,6 +165,7 @@ def evaluate_and_improve_prompt(prompt_path: Path):
             prompt_version=next_version,
         )
         write_event_log(LOG_DIR, ctrl_event)
+
         action = ctrl_event.payload.get("action", "")
         if action == "retry":
             print("🔄 Controller requests retry.")
@@ -133,7 +176,6 @@ def evaluate_and_improve_prompt(prompt_path: Path):
             print("❌ Controller aborts. No further improvement.")
             break
 
-        # --- Next round with improved prompt ---
         current_path = next_prompt_path
         semantic_version = next_version
 
@@ -152,7 +194,7 @@ def main():
         if not TEMPLATE_DIR.exists():
             print(f"⚠️ Directory {TEMPLATE_DIR} not found.")
             return
-        for prompt_file in TEMPLATE_DIR.glob("*.yaml"):
+        for prompt_file in TEMPLATE_DIR.glob("**/*.yaml"):
             evaluate_and_improve_prompt(prompt_file)
     elif args.file:
         evaluate_and_improve_prompt(Path(args.file))

@@ -1,5 +1,5 @@
 id: feature_determination_v1
-version: '1.0'
+version: 1.0.0.0
 created_by: Konstantin Milonas <info@condata.io>
 last_updated: '2025-05-21'
 
@@ -62,5 +62,3 @@ constraints:
   - Normalize units and format values consistently (e.g., 'V', 'mm', '°C').
   - Use lowercase for units and standardized technical abbreviations.
   - Include only factual, measurable, and specification-grade attributes.
-
-# IMPROVED (iteration 1)
