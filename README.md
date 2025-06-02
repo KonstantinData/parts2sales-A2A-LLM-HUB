@@ -2,108 +2,147 @@
 
 ## Overview
 
-**PARTS2SALES A2A LLM HUB** is a modular, agent-driven framework designed to validate and refine prompts within industrial AI pipelines. Tailored for B2B and manufacturing sectors, it ensures the development of high-quality prompts that are structured, interpretable, and reproducible—critical for business applications where consistency and reliability are paramount.
+**PARTS2SALES A2A LLM HUB** is a modular, agent-based prompt lifecycle manager for industrial use cases. The focus is on **fully automated, versioned prompt quality assurance** across all stages: from RAW to PRODUCTION.
 
-Leveraging autonomous agents, the system simulates a feedback loop akin to human-in-the-loop validation, optimized for automation and scalability. This approach aligns with best practices in prompt engineering, emphasizing precision, relevance, and performance optimization ([promptpanda.io](https://www.promptpanda.io/blog/ai-prompt-validation/?utm_source=chatgpt.com)).
+The system orchestrates autonomous LLM agents for evaluation, improvement, validation, and archiving of YAML prompts. It ensures traceability, high quality, and maintainability via structured logs, Pydantic schemas, and semantic versioning—**ready for business, AI teams, and CI/CD.**
 
-## Key Features
+## Core Features
 
-- **Prompt Quality Assurance**: Evaluates prompts across dimensions like task clarity, domain alignment, robustness, and composability.
-- **Iterative Refinement**: Provides feedback-driven improvements with contextual reasoning and transparent change tracking.
-- **Reproducibility**: Maintains structured logs to trace prompt evolution from initial versions to validated templates.
-- **Agent-to-Agent Orchestration (A2A)**: Automates decision-making and task handovers among validation, improvement, and control agents.
-- **Scalable Evaluation**: Utilizes structured feedback logs and performance diagnostics to scale prompt quality assurance across multiple templates and tasks.
+- **Agentic Prompt Lifecycle:** Automated processing from RAW to PRODUCTION (incl. research loop, scoring, improvement, controller supervision).
+- **Strict Versioning:** Complete support for semantic versioning, auto-increment, promotion, patch bump, and archiving.
+- **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum).
+- **Pluggable Agents:** Clearly separated, easily extensible agent classes (Quality, Improvement, Controller, Extraction, Matchmaking, Reasoning, Ops).
+- **Event Logging & Audit Trail:** Every action, score, or improvement is logged as an AgentEvent in JSON with timestamp and version.
+- **Archiving:** Automatic archiving of prompts after every stage transition.
+- **.env Config:** No secrets in code, all via OS environment variables.
 
-## Agent Architecture
+## Agent Overview
 
-### 1. `PromptQualityAgent`
+| Agent                  | Purpose/Scope                                       |
+| ---------------------- | --------------------------------------------------- |
+| PromptQualityAgent     | Rates prompts (scoring, feedback, matrix-based)     |
+| PromptImprovementAgent | Improves prompts according to feedback              |
+| ControllerAgent        | Supervises, checks compliance, triggers loops/abort |
+| FeatureExtractionAgent | Extracts technical features                         |
+| CompanyMatchAgent      | Assigns companies to request/context                |
+| ContactMatchAgent      | Matches and ranks contacts to companies             |
+| CRM Sync Agent         | Synchronizes with HubSpot (or other CRM)            |
+| UsecaseDetectionAgent  | Use-case detection, categorization                  |
+| IndustryClassAgent     | Industry classification                             |
+| CostMonitorAgent       | Monitors token & API costs                          |
 
-Evaluates prompts using a scoring matrix defined in `config/scoring/template_scoring_matrix.py`. Key evaluation dimensions include:
-- Task Clarity
-- User Alignment
-- Constraint Specification
-- Output Structure
-- Domain Fit
+## Lifecycle/Process Flow
 
-### 2. `PromptImprovementAgent`
+```mermaid
+graph LR
+    RAW --> QC[PromptQualityAgent]
+    QC -->|score<TH| IMP[PromptImprovementAgent]
+    IMP --> QC
+    QC -->|score≥TH| CTRL[ControllerAgent]
+    CTRL -->|ok| ARCH1[Archive RAW]
+    ARCH1 --> TEMPLATE[Promote to Template]
+    TEMPLATE --> ARCH2[Archive Template]
+    TEMPLATE --> FEATURE[FeatureExtractionAgent] & USECASE[UsecaseDetectionAgent] & INDUSTRY[IndustryClassAgent] & CONTACT[ContactMatchAgent]
+    subgraph "Research Loop"
+      FEATURE --> QC2
+      QC2 -->|score<TH| IMP2
+      IMP2 --> QC2
+      QC2 -->|score≥TH| CTRL2
+      CTRL2 -->|ok| ARCH3
+    end
+```
 
-Processes feedback from the quality agent to refine prompts. Changes are tracked with inline rationales for transparency. This agent utilizes LLMs to regenerate YAML prompt text based on structured feedback.
+**Process (simplified):**
 
-### 3. `ControllerAgent`
-
-Validates whether improvements align with feedback from the quality agent. If misalignment is detected, it initiates a retry loop (up to 3 attempts) to ensure prompt revisions meet expected quality standards.
-
-### 4. Execution Phase
-
-Once a prompt achieves a quality score above a defined threshold (e.g., ≥ 0.85), it undergoes execution with sample data to validate downstream performance, including output formatting and extraction consistency. Successful prompts are versioned as `*_template1.yaml`.
-
-## Process Flow (A2A Orchestration)
-
-1. A prompt (e.g., `feature_determination_v1.yaml`) is input into `run_template_batch.py`.
-2. `PromptQualityAgent` computes a weighted score and provides a detailed review.
-3. If the score is below the threshold, `PromptImprovementAgent` refines the prompt.
-4. `ControllerAgent` checks if the refinement addresses the original feedback.
-5. If not aligned, a retry is triggered (maximum of 3 loops).
-6. Once validated, the prompt is saved as final and proceeds to the execution step.
-7. Logs are stored per category: `logs/{quality_log, weighted_score, feedback_log, change_log}`.
-
-This agent-driven loop serves as a blueprint for autonomous prompt quality assurance in industrial-grade systems.
+1. CLI runner (`run_prompt_lifecycle.py`) ingests a RAW prompt.
+2. Quality check + scoring (via relevant matrix).
+3. Loop: Improve/re-evaluate until threshold is met.
+4. Controller releases, archives RAW, creates template.
+5. Research loop: For each task (feature, usecase, etc.) its own agent/matrix/logic.
+6. After each stage: Versioning, logging, archiving.
 
 ## Repository Structure
 
-```
-├── agents/                    # Agent definitions (quality, improvement, controller)
-├── cli/                       # Entry points (run_template_batch.py)
+```plaintext
+├── agents/
+│   ├── base_agent.py
+│   ├── prompt_quality_agent.py
+│   ├── prompt_improvement_agent.py
+│   ├── controller_agent.py
+│   ├── extract/feature_extraction_agent.py
+│   ├── matchmaking/company_match_agent.py
+│   ├── matchmaking/contact_match_agent.py
+│   ├── matchmaking/crm_sync_agent.py
+│   ├── reasoning/usecase_detection_agent.py
+│   ├── reasoning/industry_class_agent.py
+│   └── ops/cost_monitor_agent.py
+├── cli/
+│   └── run_prompt_lifecycle.py
 ├── config/
-│   ├── scoring/               # Prompt scoring definitions
-│   └── templates/             # Human review input templates
-├── docs/                      # Visual charts and documentation
-├── logs/                      # Evaluation output structured by type
-├── prompts/templates/         # Versioned prompt sources (e.g., *_v1.yaml)
-├── scripts/                   # Helper scripts for execution and preprocessing
-└── tests/                     # Agent test cases and scaffolds
+│   └── scoring/
+│       ├── raw_scoring_matrix.py
+│       ├── template_scoring_matrix.py
+│       ├── feature_scoring_matrix.py
+│       ├── usecase_scoring_matrix.py
+│       ├── industry_scoring_matrix.py
+│       ├── company_scoring_matrix.py
+│       └── contact_scoring_matrix.py
+├── utils/
+│   ├── event_logger.py
+│   ├── scoring_matrix_types.py
+│   ├── semantic_versioning_utils.py
+│   └── schema.py
+├── prompts/
+│   ├── 00-raw/
+│   ├── 01-templates/
+│   ├── 02-examples/
+│   └── 99-archive/
+├── docs/
+├── logs/
+└── tests/
+```
+
+## .env Template
+
+```env
+OPENAI_API_KEY=sk-...
+THRESHOLD=0.90
+MAX_ITERATIONS=3
+HUBSPOT_API_KEY=your-key   # Optional, if CRM sync is enabled
+LOG_LEVEL=INFO
 ```
 
 ## Getting Started
 
 ```bash
-# Set up environment
+# Setup
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Set your OpenAI API key
-echo "OPENAI_API_KEY=sk-..." > .env
+# Create .env and insert your keys
 
-# Run for a single prompt
-python cli/run_template_batch.py --file prompts/templates/feature_determination_v1.yaml
-
-# Or run all registered templates
-python cli/run_template_batch.py --all
+# RAW → TEMPLATE → RESEARCH → PRODUCTION
+python cli/run_prompt_lifecycle.py --all
+# ...or for a single file:
+python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.yaml
 ```
 
-## Future Extensions
+## Advanced
 
-- **Integration with LangChain or CrewAI**: For dynamic agent orchestration.
-- **Evaluation Harness Integration**: Incorporate tools like OpenPromptEval or Promptfoo for enhanced evaluation.
-- **Dataset-Driven Stress Testing**: Implement stress tests and monitor prompt drift.
-- **Output Quality Evaluation**: Ensure outputs conform to JSON schema standards.
-- **CI/CD Integration**: Set up GitHub Actions for prompt regression testing.
+- **Scoring Matrix:** Use via Enum `ScoringMatrixType` (in `utils/scoring_matrix_types.py`), type-checked, customizable per agent.
+- **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
+- **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
 
 ## Author
 
-**Konstantin Milonas**  
-*Data Analyst | SQL, Python, Tableau | Machine Learning & Analytics Engineering | Prompt Engineering | Business Process Optimization | Certified Commercial Specialist (IHK)*
-
-For inquiries or contributions, please open an issue or contact the maintainer.
+**Konstantin Milonas & AI Copilot**
 
 ## License
 
-This project is licensed under a customized [LICENSE](LICENSE) with the following stipulations:
+See [LICENSE](LICENSE).
+Non-commercial, research, and internal use allowed. No resale without permission.
 
-- ✅ Permitted for non-commercial, research, and internal applications.
-- ❌ Commercial use, resale, or model training/fine-tuning on prompt content is prohibited without explicit permission.
-
-See the [LICENSE](LICENSE) file for detailed information.
+---
 
 © 2025
