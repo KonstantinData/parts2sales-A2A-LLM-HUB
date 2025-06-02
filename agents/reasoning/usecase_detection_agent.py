@@ -1,13 +1,14 @@
 """
-feature_extraction_agent.py
+usecase_detection_agent.py
 
-Purpose : Agent for extracting product features using a dedicated scoring matrix.
+Purpose : Detects and ranks likely product use cases from structured feature and description data.
 Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.FEATURE for matrix-based scoring and extraction.
+- Uses ScoringMatrixType.USECASE for matrix-based quality checks and validation.
 - Logs all events exclusively to logs/weighted_score/
-- LLM usage and sample_data support (template-phase)
+- Designed for plug-in with lifecycle controller and LLM batch workflows.
+- Emits structured AgentEvent for full traceability and auditability.
 """
 
 from typing import Optional, Any, Dict
@@ -21,14 +22,14 @@ from pathlib import Path
 LOG_DIR = Path("logs") / "weighted_score"
 
 
-class FeatureExtractionAgent:
+class UsecaseDetectionAgent:
     def __init__(
         self,
         scoring_matrix_type: ScoringMatrixType,
         threshold: float = 0.9,
         openai_client: Optional[Any] = None,
     ):
-        self.agent_name = "FeatureExtractionAgent"
+        self.agent_name = "UsecaseDetectionAgent"
         self.agent_version = "1.1.2"
         self.scoring_matrix_type = scoring_matrix_type
         self.threshold = threshold
@@ -46,9 +47,9 @@ class FeatureExtractionAgent:
         sample_data = (
             meta.get("sample_data") if meta and "sample_data" in meta else None
         )
-        result = self.extract_features(input_text, sample_data)
+        result = self.detect_usecases(input_text, sample_data)
         event = AgentEvent(
-            event_type="feature_extraction",
+            event_type="usecase_detection",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
@@ -60,13 +61,13 @@ class FeatureExtractionAgent:
         write_event_log(LOG_DIR, event)
         return event
 
-    def extract_features(self, input_text: str, sample_data=None) -> dict:
+    def detect_usecases(self, input_text: str, sample_data=None) -> dict:
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized.")
         system_prompt = (
-            "You are a product expert. Extract and score product features. "
-            "Use the scoring matrix below for quality. "
-            'Output JSON: {"features": [<string>], "score": <float>, "feedback": <string>}'
+            "You are a domain expert. Detect and rank use cases from provided features and description. "
+            "Use the scoring matrix for quality. "
+            'Output JSON: {"usecases": [<string>], "score": <float>, "feedback": <string>}'
         )
         matrix_desc = "\n".join(
             f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
@@ -77,7 +78,7 @@ class FeatureExtractionAgent:
         )
         if sample_data:
             user_prompt += f"\nSample Data for validation:\n{sample_data}\n"
-        user_prompt += "\nExtract features, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
+        user_prompt += "\nDetect use cases, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
         response = self.openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -92,16 +93,19 @@ class FeatureExtractionAgent:
         try:
             content = response.choices[0].message.content
             result_json = json.loads(content)
-            features = result_json.get("features", [])
+            usecases = result_json.get("usecases", [])
             score = float(result_json.get("score", 0.0))
             feedback = result_json.get("feedback", "")
         except Exception as e:
-            features = []
+            usecases = []
             score = 0.0
-            feedback = f"LLM feature extraction failed: {e}"
+            feedback = f"LLM usecase detection failed: {e}"
         return {
-            "features": features,
+            "usecases": usecases,
             "score": score,
             "scoring_matrix": self.scoring_matrix,
             "feedback": feedback,
         }
+
+
+__all__ = ["UsecaseDetectionAgent"]

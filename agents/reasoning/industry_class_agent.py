@@ -1,14 +1,13 @@
 """
-usecase_detection_agent.py
+industry_class_agent.py
 
-Purpose : Detects and ranks likely product use cases from structured feature and description data.
+Purpose : Classifies industry category from features/descriptions using a dedicated scoring matrix.
 Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.USECASE for matrix-based quality checks and validation.
+- Uses ScoringMatrixType.INDUSTRY for scoring and validation.
 - Logs all events exclusively to logs/weighted_score/
-- Designed for plug-in with lifecycle controller and LLM batch workflows.
-- Emits structured AgentEvent for full traceability and auditability.
+- LLM usage and sample_data support (template-phase)
 """
 
 from typing import Optional, Any, Dict
@@ -22,14 +21,14 @@ from pathlib import Path
 LOG_DIR = Path("logs") / "weighted_score"
 
 
-class UsecaseDetectionAgent:
+class IndustryClassAgent:
     def __init__(
         self,
         scoring_matrix_type: ScoringMatrixType,
         threshold: float = 0.9,
         openai_client: Optional[Any] = None,
     ):
-        self.agent_name = "UsecaseDetectionAgent"
+        self.agent_name = "IndustryClassAgent"
         self.agent_version = "1.1.2"
         self.scoring_matrix_type = scoring_matrix_type
         self.threshold = threshold
@@ -47,9 +46,9 @@ class UsecaseDetectionAgent:
         sample_data = (
             meta.get("sample_data") if meta and "sample_data" in meta else None
         )
-        result = self.detect_usecases(input_text, sample_data)
+        result = self.classify_industry(input_text, sample_data)
         event = AgentEvent(
-            event_type="usecase_detection",
+            event_type="industry_class",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
@@ -61,13 +60,13 @@ class UsecaseDetectionAgent:
         write_event_log(LOG_DIR, event)
         return event
 
-    def detect_usecases(self, input_text: str, sample_data=None) -> dict:
+    def classify_industry(self, input_text: str, sample_data=None) -> dict:
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized.")
         system_prompt = (
-            "You are a domain expert. Detect and rank use cases from provided features and description. "
-            "Use the scoring matrix for quality. "
-            'Output JSON: {"usecases": [<string>], "score": <float>, "feedback": <string>}'
+            "You are a B2B sector expert. Classify the industry of the described company/product. "
+            "Use the scoring matrix below for quality. "
+            'Output JSON: {"industry": <string>, "score": <float>, "feedback": <string>}'
         )
         matrix_desc = "\n".join(
             f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
@@ -78,7 +77,7 @@ class UsecaseDetectionAgent:
         )
         if sample_data:
             user_prompt += f"\nSample Data for validation:\n{sample_data}\n"
-        user_prompt += "\nDetect use cases, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
+        user_prompt += "\nClassify the industry, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
         response = self.openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -93,16 +92,19 @@ class UsecaseDetectionAgent:
         try:
             content = response.choices[0].message.content
             result_json = json.loads(content)
-            usecases = result_json.get("usecases", [])
+            industry = result_json.get("industry", "")
             score = float(result_json.get("score", 0.0))
             feedback = result_json.get("feedback", "")
         except Exception as e:
-            usecases = []
+            industry = ""
             score = 0.0
-            feedback = f"LLM usecase detection failed: {e}"
+            feedback = f"LLM industry classification failed: {e}"
         return {
-            "usecases": usecases,
+            "industry": industry,
             "score": score,
             "scoring_matrix": self.scoring_matrix,
             "feedback": feedback,
         }
+
+
+__all__ = ["IndustryClassAgent"]
