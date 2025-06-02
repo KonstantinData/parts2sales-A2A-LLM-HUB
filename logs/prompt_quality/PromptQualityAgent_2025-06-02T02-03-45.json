@@ -1,0 +1,30 @@
+{
+  "event_type": "prompt_quality",
+  "agent_name": "PromptQualityAgent",
+  "agent_version": "1.0",
+  "timestamp": "2025-06-02T02:03:45.384744",
+  "step_id": "feature_setup_iter1",
+  "prompt_version": "'1.0'",
+  "meta": {
+    "file": "prompts\\00-templates\\feature_setup_v1.yaml"
+  },
+  "payload": {
+    "score": 1.0,
+    "matrix": {
+      "task_clarity": 1.0,
+      "output_spec": 1.0,
+      "structure_check": 1.0,
+      "constraint_clarity": 1.0,
+      "reasoning_scope": 1.0,
+      "evalability": 1.0,
+      "ambiguity_avoidance": 1.0,
+      "domain_alignment": 1.0,
+      "composability": 1.0,
+      "user_alignment": 1.0
+    },
+    "feedback": "Prompt meets all quality criteria.",
+    "pass_threshold": true,
+    "issues": [],
+    "prompt_version": "'1.0'"
+  }
+}

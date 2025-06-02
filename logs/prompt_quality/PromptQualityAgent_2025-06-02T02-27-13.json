@@ -1,0 +1,37 @@
+{
+  "event_type": "prompt_quality",
+  "agent_name": "PromptQualityAgent",
+  "agent_version": "1.0",
+  "timestamp": "2025-06-02T02:27:13.482801",
+  "step_id": "feature_setup_iter1",
+  "prompt_version": "1.0",
+  "meta": {
+    "file": "prompts\\00-templates\\feature_setup_v1.yaml"
+  },
+  "payload": {
+    "score": 0.3921568627450981,
+    "matrix": {
+      "task_clarity": 1.0,
+      "output_spec": 1.0,
+      "structure_check": 0.9,
+      "constraint_clarity": 1.1,
+      "reasoning_scope": 0.0,
+      "evalability": 0.0,
+      "ambiguity_avoidance": 0.0,
+      "domain_alignment": 0.0,
+      "composability": 0.0,
+      "user_alignment": 0.0
+    },
+    "feedback": "task_clarity: Task clarity OK; output_spec: Output specification OK; structure_check: Structure specified; constraint_clarity: Constraints present; reasoning_scope: No reasoning scope indicated; evalability: Evalability not defined; ambiguity_avoidance: Ambiguity avoidance not explicit; domain_alignment: Domain not mentioned; composability: Composability not addressed; user_alignment: User alignment not explicit",
+    "pass_threshold": false,
+    "issues": [
+      "No reasoning scope indicated",
+      "Evalability not defined",
+      "Ambiguity avoidance not explicit",
+      "Domain not mentioned",
+      "Composability not addressed",
+      "User alignment not explicit"
+    ],
+    "prompt_version": "1.0"
+  }
+}

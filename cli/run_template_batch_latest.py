@@ -1,5 +1,5 @@
 """
-run_template_workflow.py
+run_template_batch_latest.py
 
 Main runner for the agentic, event-driven prompt evaluation workflow.
 All agents return structured AgentEvent objects. All logs are event logs.
@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agents.core.prompt_quality_agent import PromptQualityAgent
-from agents.core.prompt_improvement_agent import PromptImprovementAgent
+from agents.prompt_quality_agent import PromptQualityAgent
+from agents.prompt_improvement_agent import PromptImprovementAgent
 from agents.controller_agent import ControllerAgent
 from agents.utils.schemas import AgentEvent
 from agents.utils.event_logger import write_event_log
@@ -35,13 +35,13 @@ EXAMPLE_DIR = ROOT / "prompts/01-examples"
 LOG_DIR = ROOT / "logs"
 THRESHOLD = float(os.getenv("THRESHOLD", "0.90"))
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "3"))
-QUALITY_SCORING_MATRIX_PATH = ROOT / "config/scoring/template_scoring_matrix.json"
 
 
 def parse_version_from_yaml(path: Path) -> str:
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip().startswith("version:"):
-            return line.split(":", 1)[1].strip()
+            version = line.split(":", 1)[1].strip()
+            return version.strip("'\"")
     return "0.1.0"
 
 
@@ -50,14 +50,10 @@ def replace_version_in_yaml(text: str, old: str, new: str) -> str:
 
 
 def evaluate_and_improve_prompt(prompt_path: Path):
-    """
-    Core agentic evaluation-improvement workflow.
-    All agent returns, logs and state follow the event schema.
-    """
     quality_agent = PromptQualityAgent(
-        client, evaluation_path=QUALITY_SCORING_MATRIX_PATH
+        openai_client=client, scoring_matrix_name="template"
     )
-    improve_agent = PromptImprovementAgent(client, creative_mode=True)
+    improve_agent = PromptImprovementAgent()
     controller_agent = ControllerAgent(client=client)
 
     current_path = prompt_path

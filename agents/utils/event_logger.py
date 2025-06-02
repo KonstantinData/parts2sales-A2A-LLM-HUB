@@ -27,8 +27,8 @@ def write_event_log(log_dir: Path, event: AgentEvent):
     path.mkdir(parents=True, exist_ok=True)
     full_path = path / filename
 
-    # Validate using .json() (Pydantic validation)
-    event_json = event.json(indent=2, ensure_ascii=False)
+    # Pydantic v2+: dict mit model_dump() und dann json.dumps
+    event_json = json.dumps(event.model_dump(), indent=2, ensure_ascii=False)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(event_json)
     print(f"[LOG] {event_type.upper()} event logged: {full_path.name}")

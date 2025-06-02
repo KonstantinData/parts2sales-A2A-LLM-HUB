@@ -1,0 +1,36 @@
+# Standardmäßige automatische Textdatei-Erkennung und Normalisierung
+* text=auto
+
+# Skripte und Code: LF-Zeilenenden erzwingen
+*.sh     text eol=lf
+*.py     text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.js     text eol=lf
+*.ts     text eol=lf
+
+# Batch- und PowerShell-Skripte für Windows: CRLF behalten
+*.bat    text eol=crlf
+*.ps1    text eol=crlf
+
+# Binärdateien (nicht normalisieren)
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+*.tar    binary
+*.db     binary
+
+# Sonstige übliche Konfigurationsdateien
+*.ini    text eol=lf
+*.toml   text eol=lf
+*.cfg    text eol=lf
+*.env    text eol=lf
