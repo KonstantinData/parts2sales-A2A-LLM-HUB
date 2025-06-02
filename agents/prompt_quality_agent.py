@@ -1,103 +1,79 @@
 """
-agents/prompt_quality_agent.py
+PromptQualityAgent
 
-Evaluates prompt templates quality with process-specific scoring matrices.
-Returns structured AgentEvent with PromptQualityResult payload.
-
-# Notes:
-- Dynamically loads scoring matrix by scoring_matrix_name.
-- Supports Python or JSON matrix files.
-- Prepared for LLM integration or rule-based scoring.
+Purpose : Agent for quality assessment of prompts in RAW, TEMPLATE and domain-specific layers.
+Version : 1.1.0
+Author  : Konstantin’s AI Copilot
+Notes   :
+- Imports all scoring matrices and selects by scoring_matrix_name (e.g., "raw", "template", ...)
+- Returns AgentEvent (Pydantic) with scoring, threshold, and feedback
+- Robust error handling, structured log-ready output
 """
 
-import json
-from pathlib import Path
-from typing import Any, Dict
-from agents.utils.schemas import AgentEvent, PromptQualityResult
+import importlib
+from typing import Dict, Any
+
+from agents.utils.schemas import AgentEvent
+
+SCORING_MATRICES = {
+    "raw": "config.scoring.raw_scoring_matrix.RAW_SCORING_MATRIX",
+    "template": "config.scoring.template_scoring_matrix.TEMPLATE_SCORING_MATRIX",
+    "feature": "config.scoring.feature_scoring_matrix.FEATURE_SCORING_MATRIX",
+    "usecase": "config.scoring.usecase_scoring_matrix.USECASE_SCORING_MATRIX",
+    "industry": "config.scoring.industry_scoring_matrix.INDUSTRY_SCORING_MATRIX",
+    "contact": "config.scoring.contact_scoring_matrix.CONTACT_SCORING_MATRIX",
+    # Extend as needed
+}
 
 
 class PromptQualityAgent:
-    def __init__(
-        self,
-        openai_client,
-        scoring_matrix_name: str = "template",
-        agent_name="PromptQualityAgent",
-        agent_version="1.0",
-        scoring_dir: Path = None,
-    ):
-        self.openai = openai_client
-        self.agent_name = agent_name
-        self.agent_version = agent_version
-        if scoring_dir is None:
-            ROOT = Path(__file__).resolve().parent.parent
-            scoring_dir = ROOT / "config" / "scoring"
-        self.scoring_dir = scoring_dir
+    def __init__(self, openai_client=None, scoring_matrix_name: str = "raw"):
+        self.openai_client = openai_client
         self.scoring_matrix_name = scoring_matrix_name
-        self.scoring_matrix = self._load_scoring_matrix(scoring_matrix_name)
 
-    def _load_scoring_matrix(self, matrix_name: str) -> Dict[str, Any]:
-        py_path = self.scoring_dir / f"{matrix_name}_scoring_matrix.py"
-        json_path = self.scoring_dir / f"{matrix_name}_scoring_matrix.json"
-
-        if py_path.exists():
-            import importlib.util
-
-            spec = importlib.util.spec_from_file_location("matrix", py_path)
-            matrix = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(matrix)
-            attr_name = f"{matrix_name.upper()}_SCORING_MATRIX"
-            if hasattr(matrix, attr_name):
-                return getattr(matrix, attr_name)
-            else:
-                raise AttributeError(f"Module {py_path} missing {attr_name}")
-        elif json_path.exists():
-            return json.loads(json_path.read_text(encoding="utf-8"))
-        else:
-            raise FileNotFoundError(
-                f"Scoring matrix for '{matrix_name}' not found at {py_path} or {json_path}"
-            )
+        # Dynamically import the correct matrix
+        if scoring_matrix_name not in SCORING_MATRICES:
+            raise ValueError(f"Unknown scoring matrix: {scoring_matrix_name}")
+        mod_path, var_name = SCORING_MATRICES[scoring_matrix_name].rsplit(".", 1)
+        module = importlib.import_module(mod_path)
+        self.scoring_matrix = getattr(module, var_name)
 
     def run(
         self,
         prompt_text: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: dict = None,
-        method: str = "matrix",
+        prompt_version: str,
+        meta: Dict[str, Any],
     ) -> AgentEvent:
-        meta = meta or {}
-        score, matrix, feedback, issues = self._score_prompt(prompt_text)
-        pass_threshold = score >= 0.9
+        score, issues = self._score_prompt(prompt_text)
+        passed = score >= 0.9
 
-        result = PromptQualityResult(
-            score=score,
-            matrix=matrix,
-            feedback=feedback,
-            pass_threshold=pass_threshold,
-            issues=issues,
-            prompt_version=prompt_version,
-        )
+        payload = {
+            "score": score,
+            "matrix": self.scoring_matrix,
+            "feedback": "" if passed else f"Issues: {issues}",
+            "pass_threshold": passed,
+            "issues": issues,
+        }
 
-        event = AgentEvent(
-            event_type="prompt_quality",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
-            step_id=f"{base_name}_iter{iteration}",
+        return AgentEvent(
+            name="PromptQualityAgent",
+            version="1.1.0",
+            timestamp=None,
+            step="quality_evaluation",
             prompt_version=prompt_version,
+            status="pass" if passed else "fail",
+            payload=payload,
             meta=meta,
-            payload=result.dict(),
         )
-        return event
 
     def _score_prompt(self, prompt_text: str):
-        # Placeholder scoring: all criteria met = 1.0, extend for real scoring
-        matrix = {key: 1.0 for key in self.scoring_matrix.keys()}
-        score = sum(matrix.values()) / len(matrix) if matrix else 0.0
-        feedback = (
-            "Prompt meets all quality criteria."
-            if score >= 0.9
-            else "Prompt needs improvement."
-        )
-        issues = [] if score >= 0.9 else ["Structure issue", "Clarity issue"]
-        return score, matrix, feedback, issues
+        # Dummy: All criteria positive, but here plug in your scoring logic!
+        issues = []
+        score = 1.0
+        for criterion in self.scoring_matrix:
+            # Implement actual NLP or regex-based checks here for real QC!
+            # If fails, append to issues.
+            continue
+        return score, issues
