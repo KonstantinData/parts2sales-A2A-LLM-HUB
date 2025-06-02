@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Evaluation Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        main {
+            max-width: 800px;
+            margin: auto;
+            padding: 2rem;
+        }
+        .summary-card {
+            background-color: var(--card-background-color);
+            border: 1px solid var(--muted-border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem 2rem;
+        }
+        .loading {
+            display: none;
+            margin-top: 1rem;
+            color: var(--primary);
+        }
+        dialog::backdrop {
+            background: rgba(0, 0, 0, 0.6);
+        }
+        #upload-preview pre {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #111;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        #run-form {
+            display: none;
+            margin-top: 2rem;
+        }
+        .success {
+            background-color: var(--form-element-valid-border-color);
+            color: var(--form-element-valid-color);
+        }
+        .pulse {
+            animation: pulseAnim 1s infinite;
+            color: var(--primary);
+            font-weight: bold;
+        }
+        @keyframes pulseAnim {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+    <script>
+        async function startPipeline(event) {
+            event.preventDefault();
+            const status = document.getElementById('status');
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            try {
+                const response = await fetch('/run', { method: 'POST' });
+                const result = await response.json();
+                status.textContent = result.status;
+            } catch (err) {
+                status.textContent = 'Error starting pipeline';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        async function pollStatus() {
+            try {
+                const res = await fetch('/download/status.json');
+                const json = await res.json();
+                const status = json.status || 'unknown';
+                const liveStatus = document.getElementById('live-status');
+
+                liveStatus.textContent = status;
+
+                if (["running", "evaluating", "saving", "providing downloads"].includes(status.toLowerCase())) {
+                    liveStatus.classList.add('pulse');
+                } else {
+                    liveStatus.classList.remove('pulse');
+                }
+
+                if (status.toLowerCase() === 'complete') {
+                    document.getElementById('download-latest').style.display = 'block';
+                }
+            } catch {
+                const liveStatus = document.getElementById('live-status');
+                liveStatus.textContent = 'unavailable';
+                liveStatus.classList.remove('pulse');
+            }
+        }
+
+        async function handleUpload(event, type) {
+            event.preventDefault();
+            const form = event.target;
+            const input = form.querySelector('input[type="file"]');
+            const button = form.querySelector('button');
+            const data = new FormData(form);
+            const url = type === 'file' ? '/upload-file' : '/upload-sheet';
+            try {
+                const res = await fetch(url, { method: 'POST', body: data });
+                const json = await res.json();
+                const preview = document.getElementById('upload-preview');
+
+                if (!res.ok) {
+                    preview.innerHTML = `<p style='color:red'><strong>Error:</strong> ${json.error}</p><p>Expected format: part_number, title, manufacturer</p>`;
+                    document.getElementById('upload-dialog').showModal();
+                    form.reset();
+                    return;
+                }
+
+                preview.innerHTML = `<pre>${JSON.stringify(json.preview, null, 2)}</pre>
+                <p><strong>File successfully uploaded. Close this window and run the evaluation.</strong></p>`;
+                document.getElementById('upload-dialog').showModal();
+                document.getElementById('run-form').style.display = 'block';
+                button.classList.add('success');
+            } catch (err) {
+                alert('Unexpected error during upload');
+                form.reset();
+            }
+        }
+
+        setInterval(pollStatus, 3000);
+    </script>
+</head>
+<body>
+    <main>
+        <h1>📊 LLM Evaluation Dashboard</h1>
+
+        <h2>📤 Upload Input Data</h2>
+        <form onsubmit="handleUpload(event, 'file')">
+            <input type="file" name="file" accept=".csv,.xlsx" required>
+            <button type="submit">Upload File</button>
+        </form>
+
+        <form onsubmit="handleUpload(event, 'sheet')">
+            <input type="url" name="url" placeholder="Paste Google Sheet URL here" required>
+            <button type="submit">Import Google Sheet</button>
+        </form>
+
+        <dialog id="upload-dialog">
+            <article>
+                <header><strong>📄 Input Preview</strong></header>
+                <div id="upload-preview"></div>
+                <footer>
+                    <button onclick="document.getElementById('upload-dialog').close()">Close</button>
+                </footer>
+            </article>
+        </dialog>
+
+        <form id="run-form" onsubmit="startPipeline(event)">
+            <button type="submit" class="contrast">▶️ Run Evaluation Pipeline</button>
+            <div id="loading" class="loading">⏳ Starting evaluation...</div>
+            <p id="status"></p>
+        </form>
+
+        <h2>📥 Download Latest Result</h2>
+        <p id="download-latest" style="display: none">
+            ✅ <a href="/download/latest" download>Download evaluation_output_*.json</a>
+        </p>
+
+        <h3>📡 Pipeline Status</h3>
+        <p><strong>Current Status:</strong> <span id="live-status">loading...</span></p>
+    </main>
+</body>
+</html>

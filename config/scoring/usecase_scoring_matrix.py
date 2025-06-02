@@ -7,7 +7,7 @@ Usage:
 - Used by PromptQualityAgent when scoring use case detection prompts.
 """
 
-USECASE_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "usecase_relevance": 1.3,  # Are relevant use cases identified?
     "completeness": 1.1,  # Is the detection comprehensive?
     "clarity": 1.0,  # Is the prompt clear and well-structured?

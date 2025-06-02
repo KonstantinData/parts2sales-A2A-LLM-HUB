@@ -1,0 +1,24 @@
+<!-- templates/report.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Parts2Sales Evaluation Report</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    h1 { color: #2C3E50; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Evaluation Summary</h1>
+  <p>Date: {{ summary.timestamp }}</p>
+  <table>
+    <tr><th>Feature Count</th><td>{{ summary.feature_count }}</td></tr>
+    <tr><th>Use Cases</th><td>{{ summary.use_case_count }}</td></tr>
+    <tr><th>Industries</th><td>{{ summary.industry_count }}</td></tr>
+    <tr><th>Total Cost (USD)</th><td>{{ summary.total_cost_usd }}</td></tr>
+  </table>
+</body>
+</html>

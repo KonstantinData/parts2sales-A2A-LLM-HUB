@@ -1,62 +1,107 @@
 """
 contact_match_agent.py
 
-Purpose : Matches and ranks contacts to companies.
-Version : 1.1.0
+Purpose : Matches prompts/descriptions against contact records using a weighted scoring matrix.
+Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.CONTACT for evaluation and ranking.
-- Returns AgentEvent with traceable payload structure.
-- Can be extended for CRM integration or LLM-based matching.
+- Uses ScoringMatrixType.CONTACT for scoring and validation.
+- Logs all events exclusively to logs/weighted_score/
+- Injects sample data in template-phase.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Optional, Any, Dict
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.scoring_matrix_loader import load_scoring_matrix
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
 class ContactMatchAgent:
     def __init__(
         self,
-        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.CONTACT,
+        scoring_matrix_type: ScoringMatrixType,
+        threshold: float = 0.9,
         openai_client: Optional[Any] = None,
     ):
         self.agent_name = "ContactMatchAgent"
-        self.agent_version = "1.1.0"
+        self.agent_version = "1.1.2"
         self.scoring_matrix_type = scoring_matrix_type
+        self.threshold = threshold
         self.openai_client = openai_client
+        self.scoring_matrix = load_scoring_matrix(self.scoring_matrix_type)
 
     def run(
         self,
-        input_data: Dict[str, Any],
+        input_text: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
+        prompt_version: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
-        # Dummy logic for now – in production use CRM or LLM logic.
-        contacts = self._match_contacts(input_data)
-        payload = {
-            "contacts": contacts,
-            "input": input_data,
-            "info": "Contact matching complete.",
-        }
+        sample_data = (
+            meta.get("sample_data") if meta and "sample_data" in meta else None
+        )
+        result = self.match_contact(input_text, sample_data)
         event = AgentEvent(
-            event_type="contact_matching",
+            event_type="contact_match",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
-            payload=payload,
+            payload=result,
         )
+        write_event_log(LOG_DIR, event)
         return event
 
-    def _match_contacts(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # Example result – production could use HubSpot or another DB.
-        return [
-            {"name": "Maria Schmidt", "role": "Purchasing Manager", "confidence": 0.81},
-            {"name": "Peter Müller", "role": "Head of Engineering", "confidence": 0.73},
-        ]
+    def match_contact(self, input_text: str, sample_data=None) -> dict:
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized.")
+        system_prompt = (
+            "You are a CRM data expert. Match the provided input to possible contacts in the sample. "
+            "Use the scoring matrix for match quality. "
+            'Output JSON: {"matches": [<string>], "score": <float>, "feedback": <string>}'
+        )
+        matrix_desc = "\n".join(
+            f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
+        )
+        user_prompt = (
+            f"Input text:\n'''\n{input_text}\n'''\n\n"
+            f"Scoring matrix:\n{matrix_desc}\n"
+        )
+        if sample_data:
+            user_prompt += f"\nSample Data for validation:\n{sample_data}\n"
+        user_prompt += "\nReturn contact matches, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=512,
+            temperature=0.0,
+        )
+        import json
+
+        try:
+            content = response.choices[0].message.content
+            result_json = json.loads(content)
+            matches = result_json.get("matches", [])
+            score = float(result_json.get("score", 0.0))
+            feedback = result_json.get("feedback", "")
+        except Exception as e:
+            matches = []
+            score = 0.0
+            feedback = f"LLM contact matching failed: {e}"
+        return {
+            "matches": matches,
+            "score": score,
+            "scoring_matrix": self.scoring_matrix,
+            "feedback": feedback,
+        }

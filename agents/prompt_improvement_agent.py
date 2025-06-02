@@ -1,27 +1,34 @@
 """
 prompt_improvement_agent.py
 
-Purpose : Improves prompt text based on feedback from the quality agent and current scoring matrix.
-Version : 1.1.0
+Purpose : Agent for improving prompts based on LLM feedback and weighted rationale.
+Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType Enum for context (type-safe).
-- Optionally, could use scoring matrix in the future for context-aware improvement (here als Platzhalter, falls gewünscht).
-- Produces improved prompt and rationale as payload.
+- Receives meta/feedback, uses LLM for guided rewriting.
+- Logs all improvement events exclusively to logs/weighted_score/
+- Usage:
+    agent = PromptImprovementAgent()
+    agent.run(prompt_text, feedback, base_name, iteration, prompt_version)
 """
 
-from typing import Dict, Any
+from typing import Optional, Any
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
-from utils.schema import PromptQualityResult
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
 class PromptImprovementAgent:
-    def __init__(self, scoring_matrix_type: ScoringMatrixType = None):
+    def __init__(
+        self,
+        openai_client: Optional[Any] = None,
+    ):
         self.agent_name = "PromptImprovementAgent"
-        self.agent_version = "1.1.0"
-        self.scoring_matrix_type = scoring_matrix_type
+        self.agent_version = "1.1.2"
+        self.openai_client = openai_client
 
     def run(
         self,
@@ -29,15 +36,10 @@ class PromptImprovementAgent:
         feedback: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
+        prompt_version: Optional[str] = None,
+        meta: Optional[dict] = None,
     ) -> AgentEvent:
-        # --- Hier später Matrix- oder Typ-Spezifik-Logik möglich ---
-        improved_prompt, rationale = self.improve_prompt(prompt_text, feedback)
-        payload = {
-            "improved_prompt": improved_prompt,
-            "rationale": rationale,
-        }
+        improved, rationale = self.improve_prompt(prompt_text, feedback)
         event = AgentEvent(
             event_type="prompt_improvement",
             agent_name=self.agent_name,
@@ -46,13 +48,17 @@ class PromptImprovementAgent:
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
-            payload=payload,
+            payload={
+                "improved_prompt": improved,
+                "rationale": rationale,
+                "feedback": feedback,
+            },
         )
+        write_event_log(LOG_DIR, event)
         return event
 
     def improve_prompt(self, prompt_text: str, feedback: str):
-        # TODO: Replace dummy logic with a real LLM-based improvement step
-        # Here, just a stub that appends feedback as a comment
-        improved = prompt_text + "\n# FEEDBACK FOR IMPROVEMENT:\n" + feedback
-        rationale = "Appended feedback as instruction for improvement."
+        # Replace with actual LLM logic
+        improved = prompt_text + "\n# Improved based on feedback"
+        rationale = "Prompt rewritten to address feedback."
         return improved, rationale

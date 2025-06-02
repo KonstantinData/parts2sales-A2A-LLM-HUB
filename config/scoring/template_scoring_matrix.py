@@ -9,7 +9,7 @@ Usage:
 - Separate from scoring schemes that evaluate LLM output quality.
 """
 
-TEMPLATE_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "task_clarity": 1.0,  # Is the task clearly described?
     "output_spec": 1.0,  # Is the expected output format specified?
     "structure_check": 0.9,  # Is the prompt structurally consistent (e.g., YAML format)?

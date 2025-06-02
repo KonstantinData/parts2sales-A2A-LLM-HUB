@@ -2,10 +2,11 @@
 controller_agent.py
 
 Purpose : Supervises the prompt lifecycle by aligning agent outputs, making retry/abort/continue decisions.
-Version : 1.1.0
+Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
 - Accepts scoring matrix type as explicit Enum for max type safety.
+- Logs all controller events exclusively to logs/weighted_score/
 - May use scoring matrix in future for custom decision policies.
 - Core output is an AgentEvent with controller action ("retry", "abort", "continue").
 """
@@ -14,16 +15,20 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
 class ControllerAgent:
     def __init__(
         self,
-        scoring_matrix_type: ScoringMatrixType = None,
+        scoring_matrix_type: Optional[ScoringMatrixType] = None,
         openai_client: Optional[Any] = None,
     ):
         self.agent_name = "ControllerAgent"
-        self.agent_version = "1.1.0"
+        self.agent_version = "1.1.2"
         self.scoring_matrix_type = scoring_matrix_type
         self.openai_client = openai_client
 
@@ -36,7 +41,6 @@ class ControllerAgent:
         prompt_version: str = None,
         meta: Dict[str, Any] = None,
     ) -> AgentEvent:
-        # Decision logic could leverage matrix or meta; currently only uses feedback
         action = self.controller_decision(feedback)
         payload = {
             "action": action,
@@ -52,6 +56,7 @@ class ControllerAgent:
             meta=meta or {},
             payload=payload,
         )
+        write_event_log(LOG_DIR, event)
         return event
 
     def controller_decision(self, feedback: str) -> str:

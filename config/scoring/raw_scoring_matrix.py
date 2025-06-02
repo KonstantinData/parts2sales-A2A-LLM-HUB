@@ -10,7 +10,7 @@ Notes   :
 - Usage: Pass as scoring_matrix_name="raw" to agent
 """
 
-RAW_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "clarity": 1.2,  # Prompt goal clear and unambiguous?
     "format_consistency": 1.1,  # YAML/JSON structure correct?
     "initial_structure": 1.0,  # All required fields present?

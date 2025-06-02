@@ -7,7 +7,7 @@ Usage:
 - Used by PromptQualityAgent when scoring industry classification prompts.
 """
 
-INDUSTRY_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "classification_accuracy": 1.3,  # Accuracy of industry classification
     "clarity": 1.1,  # Clarity of instructions
     "evalability": 1.2,  # Ease of evaluating classification output

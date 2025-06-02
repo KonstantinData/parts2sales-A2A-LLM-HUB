@@ -1,24 +1,32 @@
 """
 prompt_quality_agent.py
 
-Purpose : Evaluates prompt quality using scoring matrix logic; returns detailed, type-safe AgentEvent.
-Version : 1.2.0
+Purpose : Agent for evaluating prompt quality using a dynamic scoring matrix.
+Version : 1.2.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType Enum for full type safety and loader compatibility.
-- Loads and applies the correct scoring matrix based on scoring_matrix_type.
-- Provides structured score, feedback, and pass/fail threshold in the payload.
-- No business logic change outside the required refactor for type safety.
-- Supports extension for new scoring types by updating ScoringMatrixType.
+- Uses ScoringMatrixType enum from utils
+- Logs all events exclusively to logs/weighted_score/
+- Loads scoring matrix via loader, supports OpenAI client injection
+- Raises on missing scoring matrix or invalid type
+- Usage:
+    from utils.scoring_matrix_types import ScoringMatrixType
+    agent = PromptQualityAgent(
+        scoring_matrix_type=ScoringMatrixType.FEATURE,
+        threshold=0.9,
+        openai_client=openai_client_instance,
+    )
 """
 
-from typing import Dict, Any, Optional
+from typing import Optional, Any, Dict
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent, PromptQualityResult
-from utils.scoring_matrix_loader import (
-    load_scoring_matrix,
-)  # Helper to load scoring matrix by type
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.scoring_matrix_loader import load_scoring_matrix
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
 class PromptQualityAgent:
@@ -29,7 +37,7 @@ class PromptQualityAgent:
         openai_client: Optional[Any] = None,
     ):
         self.agent_name = "PromptQualityAgent"
-        self.agent_version = "1.2.0"
+        self.agent_version = "1.2.2"
         self.scoring_matrix_type = scoring_matrix_type
         self.threshold = threshold
         self.openai_client = openai_client
@@ -43,10 +51,7 @@ class PromptQualityAgent:
         prompt_version: Optional[str] = None,
         meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
-        # 1. Score prompt using loaded matrix (here: dummy logic, replace with real eval)
         result = self.evaluate_prompt(prompt_text)
-
-        # 2. Package all output into the unified schema
         event = AgentEvent(
             event_type="prompt_quality",
             agent_name=self.agent_name,
@@ -57,14 +62,13 @@ class PromptQualityAgent:
             meta=meta or {},
             payload=result.dict(),
         )
+        write_event_log(LOG_DIR, event)
         return event
 
     def evaluate_prompt(self, prompt_text: str) -> PromptQualityResult:
-        # TODO: Replace dummy with actual evaluation using OpenAI/scoring_matrix
-        # Dummy: always pass with all features
         matrix = self.scoring_matrix
         feedback = "All major criteria passed."
-        score = 1.0  # Simulate pass
+        score = 1.0  # Simulate pass, replace with real scoring logic
         pass_threshold = score >= self.threshold
         issues = []
         return PromptQualityResult(

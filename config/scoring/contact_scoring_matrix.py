@@ -7,7 +7,7 @@ Usage:
 - Used by PromptQualityAgent when scoring contact/company matching prompts.
 """
 
-CONTACT_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "match_relevance": 1.3,  # Relevance of matched contacts
     "confidence": 1.2,  # Confidence scoring of matches
     "clarity": 1.0,  # Prompt clarity

@@ -7,7 +7,7 @@ Usage:
 - Used by PromptQualityAgent when scoring feature extraction prompts.
 """
 
-FEATURE_SCORING_MATRIX = {
+SCORING_MATRIX = {
     "feature_coverage": 1.2,  # Does the prompt extract all relevant features?
     "precision": 1.1,  # Is feature extraction precise and unambiguous?
     "format_consistency": 1.0,  # Is the output format consistent for features?

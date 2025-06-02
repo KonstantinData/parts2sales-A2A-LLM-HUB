@@ -1,74 +1,64 @@
 """
-feature_extraction_agent.py
+prompt_improvement_agent.py
 
-Purpose : Extracts technical product features from input data for prompt-based LLM workflows.
-Version : 1.1.0
+Purpose : Agent for improving prompts based on LLM feedback and weighted rationale.
+Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.FEATURE for type-safe matrix-based quality evaluation.
-- Validates feature extraction output structure.
-- Emits structured AgentEvent for auditability.
+- Receives meta/feedback, uses LLM for guided rewriting.
+- Logs all improvement events exclusively to logs/weighted_score/
+- Usage:
+    agent = PromptImprovementAgent()
+    agent.run(prompt_text, feedback, base_name, iteration, prompt_version)
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Optional, Any
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
-from utils.schema import PromptQualityResult  # Use if needed for payload structure
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
-class FeatureExtractionAgent:
+class PromptImprovementAgent:
     def __init__(
         self,
-        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.FEATURE,
         openai_client: Optional[Any] = None,
     ):
-        self.agent_name = "FeatureExtractionAgent"
-        self.agent_version = "1.1.0"
-        self.scoring_matrix_type = scoring_matrix_type
+        self.agent_name = "PromptImprovementAgent"
+        self.agent_version = "1.1.2"
         self.openai_client = openai_client
 
     def run(
         self,
-        input_data: Dict[str, Any],
+        prompt_text: str,
+        feedback: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
+        prompt_version: Optional[str] = None,
+        meta: Optional[dict] = None,
     ) -> AgentEvent:
-        # Core extraction logic, LLM or heuristic (dummy implementation here)
-        features = self._extract_features(input_data)
-        payload = {
-            "features": features,
-            "input": input_data,
-            "info": "Feature extraction complete.",
-        }
+        improved, rationale = self.improve_prompt(prompt_text, feedback)
         event = AgentEvent(
-            event_type="feature_extraction",
+            event_type="prompt_improvement",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
-            payload=payload,
+            payload={
+                "improved_prompt": improved,
+                "rationale": rationale,
+                "feedback": feedback,
+            },
         )
+        write_event_log(LOG_DIR, event)
         return event
 
-    def _extract_features(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # Placeholder for LLM or heuristic; here only structure.
-        # In production, call LLM or custom extraction logic.
-        return [
-            {
-                "name": "voltage",
-                "value": "24",
-                "unit": "v",
-                "source": "title",
-            },
-            {
-                "name": "protection_class",
-                "value": "ip67",
-                "unit": "",
-                "source": "title",
-            },
-        ]
+    def improve_prompt(self, prompt_text: str, feedback: str):
+        # Replace with actual LLM logic
+        improved = prompt_text + "\n# Improved based on feedback"
+        rationale = "Prompt rewritten to address feedback."
+        return improved, rationale

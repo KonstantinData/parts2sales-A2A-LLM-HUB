@@ -2,11 +2,12 @@
 crm_sync_agent.py
 
 Purpose : Synchronizes matched company/contact data with CRM (e.g., HubSpot).
-Version : 1.1.0
+Version : 1.1.1
 Author  : Konstantin & AI Copilot
 Notes   :
 - Handles both write and verification steps (sync + confirm).
 - Abstracts CRM provider behind a pluggable method (default: dummy).
+- Logs all crm_sync events exclusively to logs/weighted_score/
 - Emits AgentEvent for auditing and error trace.
 - Extend `_sync_to_crm` for production HubSpot/other API integration.
 """
@@ -15,6 +16,10 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
 class CRMSyncAgent:
@@ -24,7 +29,7 @@ class CRMSyncAgent:
         scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.COMPANY,
     ):
         self.agent_name = "CRMSyncAgent"
-        self.agent_version = "1.1.0"
+        self.agent_version = "1.1.1"
         self.scoring_matrix_type = scoring_matrix_type
         self.crm_provider = crm_provider  # Placeholder for e.g. HubSpot API wrapper
 
@@ -52,6 +57,7 @@ class CRMSyncAgent:
             meta=meta or {},
             payload=payload,
         )
+        write_event_log(LOG_DIR, event)
         return event
 
     def _sync_to_crm(self, sync_data: Dict[str, Any]) -> (bool, str):

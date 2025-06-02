@@ -1,62 +1,108 @@
 """
-industry_class_agent.py
+usecase_detection_agent.py
 
-Purpose : Detects and assigns industry classes to products based on their features and metadata.
-Version : 1.1.0
+Purpose : Detects and ranks likely product use cases from structured feature and description data.
+Version : 1.1.2
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.INDUSTRY for matrix-based validation and evaluation.
-- Emits structured AgentEvent for traceability and downstream use.
-- Can be integrated with any LLM or custom logic for industry detection.
+- Uses ScoringMatrixType.USECASE for matrix-based quality checks and validation.
+- Logs all events exclusively to logs/weighted_score/
+- Designed for plug-in with lifecycle controller and LLM batch workflows.
+- Emits structured AgentEvent for full traceability and auditability.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Optional, Any, Dict
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
 from utils.schema import AgentEvent
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.scoring_matrix_loader import load_scoring_matrix
+from utils.event_logger import write_event_log
+from pathlib import Path
+
+LOG_DIR = Path("logs") / "weighted_score"
 
 
-class IndustryClassAgent:
+class UsecaseDetectionAgent:
     def __init__(
         self,
-        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.INDUSTRY,
+        scoring_matrix_type: ScoringMatrixType,
+        threshold: float = 0.9,
         openai_client: Optional[Any] = None,
     ):
-        self.agent_name = "IndustryClassAgent"
-        self.agent_version = "1.1.0"
+        self.agent_name = "UsecaseDetectionAgent"
+        self.agent_version = "1.1.2"
         self.scoring_matrix_type = scoring_matrix_type
+        self.threshold = threshold
         self.openai_client = openai_client
+        self.scoring_matrix = load_scoring_matrix(self.scoring_matrix_type)
 
     def run(
         self,
-        input_data: Dict[str, Any],
+        input_text: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
+        prompt_version: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
-        # Dummy logic: Replace with real LLM-based or heuristic detection.
-        industries = self._detect_industries(input_data)
-        payload = {
-            "industries": industries,
-            "input": input_data,
-            "info": "Industry classification complete.",
-        }
+        sample_data = (
+            meta.get("sample_data") if meta and "sample_data" in meta else None
+        )
+        result = self.detect_usecases(input_text, sample_data)
         event = AgentEvent(
-            event_type="industry_classification",
+            event_type="usecase_detection",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
-            payload=payload,
+            payload=result,
         )
+        write_event_log(LOG_DIR, event)
         return event
 
-    def _detect_industries(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # Example output; in production this would use an LLM or mapping logic.
-        return [
-            {"name": "industrial automation", "confidence": 0.93},
-            {"name": "logistics", "confidence": 0.78},
-        ]
+    def detect_usecases(self, input_text: str, sample_data=None) -> dict:
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized.")
+        system_prompt = (
+            "You are a domain expert. Detect and rank use cases from provided features and description. "
+            "Use the scoring matrix for quality. "
+            'Output JSON: {"usecases": [<string>], "score": <float>, "feedback": <string>}'
+        )
+        matrix_desc = "\n".join(
+            f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
+        )
+        user_prompt = (
+            f"Input text:\n'''\n{input_text}\n'''\n\n"
+            f"Scoring matrix:\n{matrix_desc}\n"
+        )
+        if sample_data:
+            user_prompt += f"\nSample Data for validation:\n{sample_data}\n"
+        user_prompt += "\nDetect use cases, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=512,
+            temperature=0.0,
+        )
+        import json
+
+        try:
+            content = response.choices[0].message.content
+            result_json = json.loads(content)
+            usecases = result_json.get("usecases", [])
+            score = float(result_json.get("score", 0.0))
+            feedback = result_json.get("feedback", "")
+        except Exception as e:
+            usecases = []
+            score = 0.0
+            feedback = f"LLM usecase detection failed: {e}"
+        return {
+            "usecases": usecases,
+            "score": score,
+            "scoring_matrix": self.scoring_matrix,
+            "feedback": feedback,
+        }
