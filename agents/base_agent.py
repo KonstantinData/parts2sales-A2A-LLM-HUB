@@ -1,42 +1,30 @@
-#!/usr/bin/env python3
 """
-File: base_agent.py
-Type: Python Module (Abstract Base Class)
+base_agent.py
 
-Purpose:
---------
-This module defines a base class for all agent types in the system.
-Each agent must implement a `run()` method that takes a structured input
-(e.g., prompt path, config object, metadata) and returns an evaluation result or improved artifact.
-
-Usage:
-------
-This file should be imported and subclassed by all specific agents like:
-- PromptQualityAgent
-- PromptImprovementAgent
-
-Notes:
-------
-- Acts as an interface to standardize how agents behave.
-- Enables pluggability and unified integration in workflows.
+Purpose : Abstract base class for all LLM agents (standardized interface).
+Version : 1.0.0
+Author  : Konstantin & AI Copilot
+Notes   :
+- All agents must implement `run()`
+- Promotes pluggability and unified integration in pipelines
+- Add agent name for unique identification/logging
+- Subclass in: PromptQualityAgent, PromptImprovementAgent, ControllerAgent, etc.
 """
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 
 class BaseAgent(ABC):
     """Abstract base class for all LLM agents."""
 
     def __init__(self, name: str):
-        self.name = name  # Note: Each agent can be uniquely identified
+        self.name = name
 
     @abstractmethod
     def run(self, *args, **kwargs):
         """
-        Executes the main logic of the agent.
-
+        Execute the main logic of the agent.
         Returns:
-            Any: Can be a score, modified file, or result object
+            Any (score, artifact, result object, etc.)
         """
         pass

@@ -1,51 +1,63 @@
 """
-agents/controller_agent.py
+controller_agent.py
 
-Controller agent for decision making in prompt workflows.
-Analyzes improvement feedback and decides on retry or abort.
-
-# Notes:
-- Returns structured AgentEvent with action payload.
-- Designed for pluggable decision logic.
+Purpose : Central coordination agent to decide workflow actions (continue, retry, abort)
+          after each prompt improvement cycle, based on feedback and current state.
+Version : 1.2.0
+Author  : Konstantin & AI Copilot
+Notes   :
+- Receives improved prompt and meta info after each cycle
+- Applies rule-based or LLM-based policy to trigger: 'retry', 'abort', 'accept'
+- Returns AgentEvent with action and rationale
+- Log-/pipeline-ready, Pydantic contract
 """
 
-from agents.utils.schemas import AgentEvent
+from utils.schema import AgentEvent
+from datetime import datetime
 
 
 class ControllerAgent:
-    def __init__(
-        self,
-        client=None,
-        agent_name="ControllerAgent",
-        agent_version="1.0",
-    ):
-        self.client = client
-        self.agent_name = agent_name
-        self.agent_version = agent_version
+    def __init__(self, llm_client=None):
+        self.llm_client = llm_client  # Optional for LLM-based decision logic
 
     def run(
         self,
-        prompt_text: str,
+        improved_prompt: str,
         feedback: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: dict = None,
+        prompt_version: str,
+        meta=None,
     ) -> AgentEvent:
-        meta = meta or {}
-
-        # Simple heuristic: retry if feedback contains "improvement"
-        action = "retry" if "improvement" in feedback.lower() else "abort"
-
-        payload = {"action": action}
-
-        event = AgentEvent(
+        action, rationale = self._decide(improved_prompt, feedback, iteration)
+        payload = {
+            "action": action,  # 'retry', 'abort', 'accept'
+            "rationale": rationale,
+            "feedback": feedback,
+            "iteration": iteration,
+        }
+        return AgentEvent(
             event_type="controller_decision",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
-            step_id=f"{base_name}_iter{iteration}",
+            agent_name="ControllerAgent",
+            agent_version="1.2.0",
+            timestamp=datetime.utcnow(),
+            step_id=f"controller_{iteration}",
             prompt_version=prompt_version,
-            meta=meta,
+            meta=meta or {},
             payload=payload,
         )
-        return event
+
+    def _decide(
+        self, improved_prompt: str, feedback: str, iteration: int
+    ) -> (str, str):
+        # Baseline policy:
+        # If critical feedback or too many iterations, abort. Otherwise, retry.
+        if iteration >= 3:
+            return "abort", "Max iterations reached."
+        if feedback and any(
+            w in feedback.lower() for w in ["fatal", "error", "unfixable", "abandon"]
+        ):
+            return "abort", "Critical feedback: aborting."
+        if not feedback or feedback.strip() == "":
+            return "accept", "No feedback: improvement accepted."
+        return "retry", "Feedback present: retry improvement cycle."

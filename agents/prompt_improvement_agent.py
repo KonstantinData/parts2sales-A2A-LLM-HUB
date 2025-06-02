@@ -1,29 +1,24 @@
 """
-agents/prompt_improvement_agent.py
+prompt_improvement_agent.py
 
-Improves prompts based on feedback and target criteria.
-Returns structured AgentEvent objects for agentic workflows.
-
-# Notes:
-- Supports creative_mode flag for exploratory improvements.
-- Designed for extension with LLM calls or heuristic logic.
+Purpose : Agent to iteratively improve prompt definitions based on feedback from quality and controller agents.
+Version : 1.2.0
+Author  : Konstantin & AI Copilot
+Notes   :
+- Applies improvement heuristics or LLM-driven rewrite (plug-in ready)
+- Receives prompt text, feedback, and meta/context info
+- Returns AgentEvent with improved prompt and rationale
+- Handles prompt_version increment (done by runner)
+- Log-ready, Pydantic contract
 """
 
-from agents.utils.schemas import AgentEvent
+from utils.schema import AgentEvent
+from datetime import datetime
 
 
 class PromptImprovementAgent:
-    def __init__(
-        self,
-        openai_client=None,
-        creative_mode=False,
-        agent_name="PromptImprovementAgent",
-        agent_version="1.0",
-    ):
-        self.openai = openai_client
-        self.creative_mode = creative_mode
-        self.agent_name = agent_name
-        self.agent_version = agent_version
+    def __init__(self, llm_client=None):
+        self.llm_client = llm_client  # Optional, for LLM-driven rewrite
 
     def run(
         self,
@@ -31,27 +26,44 @@ class PromptImprovementAgent:
         feedback: str,
         base_name: str,
         iteration: int,
-        prompt_version: str = None,
-        meta: dict = None,
+        prompt_version: str,
+        meta=None,
     ) -> AgentEvent:
-        meta = meta or {}
-
-        improved_prompt = prompt_text + f"\n# IMPROVED (iteration {iteration})"
-        rationale = f"Applied feedback: {feedback}. Creative mode: {self.creative_mode}"
-
+        improved_prompt, rationale = self._improve_prompt(prompt_text, feedback)
         payload = {
             "improved_prompt": improved_prompt,
             "rationale": rationale,
-            "prompt_version": prompt_version,
+            "previous_version": prompt_version,
+            "feedback": feedback,
         }
-
-        event = AgentEvent(
+        return AgentEvent(
             event_type="prompt_improvement",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
-            step_id=f"{base_name}_iter{iteration}",
+            agent_name="PromptImprovementAgent",
+            agent_version="1.2.0",
+            timestamp=datetime.utcnow(),
+            step_id=f"improve_{iteration}",
             prompt_version=prompt_version,
-            meta=meta,
+            meta=meta or {},
             payload=payload,
         )
-        return event
+
+    def _improve_prompt(self, prompt_text: str, feedback: str) -> (str, str):
+        # Simple heuristic: Append feedback as TODO if LLM not used
+        if not feedback:
+            rationale = "No feedback provided; no changes applied."
+            return prompt_text, rationale
+
+        # If LLM client provided, use it to rewrite
+        if self.llm_client:
+            improved = self.llm_client.rewrite_prompt(prompt_text, feedback)
+            rationale = "LLM rewrite applied based on feedback."
+            return improved, rationale
+
+        # Else, append feedback as a TODO at the end (simple baseline)
+        improved_prompt = (
+            prompt_text
+            + "\n\n# TODO (auto): The following improvements are suggested:\n"
+            + feedback
+        )
+        rationale = "Feedback appended as TODO; manual adjustment required."
+        return improved_prompt, rationale

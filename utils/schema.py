@@ -1,13 +1,13 @@
 """
-Schemas for structured events and payloads using Pydantic.
+schema.py
 
-Defines AgentEvent, PromptQualityResult, and other data contracts for
-strict typing, validation, versioning, and extensibility.
-
-# Notes:
-- All event payloads extend base Pydantic models.
-- Ensures consistent schema across agents and workflow.
-- Includes timestamps and meta info for traceability.
+Purpose : Central Pydantic schemas for all agent events and payloads.
+Version : 1.0.0
+Author  : Konstantin & AI Copilot
+Notes   :
+- All agent interactions and logs use AgentEvent as the base contract.
+- Supports strict typing, extensibility, and traceability across all workflow steps.
+- Contains specialized payload classes (e.g., PromptQualityResult) as needed.
 """
 
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ class PromptQualityResult(BaseModel):
     matrix: Dict[str, float]
     feedback: str
     pass_threshold: bool
-    issues: List[str] = []
+    issues: List[str] = Field(default_factory=list)
     prompt_version: Optional[str] = None
 
 
@@ -31,5 +31,10 @@ class AgentEvent(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     step_id: str
     prompt_version: Optional[str] = None
-    meta: Dict[str, Any] = {}
+    meta: Dict[str, Any] = Field(default_factory=dict)
     payload: Dict[str, Any]
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }

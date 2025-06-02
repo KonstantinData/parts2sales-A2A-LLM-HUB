@@ -1,42 +1,24 @@
 """
 PromptQualityAgent
 
-Purpose : Agent for quality assessment of prompts in RAW, TEMPLATE and domain-specific layers.
-Version : 1.1.0
-Author  : Konstantin’s AI Copilot
+Purpose : Agent for realistic, rule-based quality assessment of prompts (RAW, TEMPLATE, domain layers).
+Version : 1.2.0
+Author  : Konstantin & AI Copilot
 Notes   :
-- Imports all scoring matrices and selects by scoring_matrix_name (e.g., "raw", "template", ...)
-- Returns AgentEvent (Pydantic) with scoring, threshold, and feedback
-- Robust error handling, structured log-ready output
+- Uses structured scoring matrix (configurable)
+- Enforces minimum sections (objective, input_format, output_format)
+- Expandable: structure, grammar, completeness, relevance (see TODO)
+- Returns AgentEvent (Pydantic) with score, pass/fail, feedback, and issues
 """
 
-import importlib
-from typing import Dict, Any
-
-from agents.utils.schemas import AgentEvent
-
-SCORING_MATRICES = {
-    "raw": "config.scoring.raw_scoring_matrix.RAW_SCORING_MATRIX",
-    "template": "config.scoring.template_scoring_matrix.TEMPLATE_SCORING_MATRIX",
-    "feature": "config.scoring.feature_scoring_matrix.FEATURE_SCORING_MATRIX",
-    "usecase": "config.scoring.usecase_scoring_matrix.USECASE_SCORING_MATRIX",
-    "industry": "config.scoring.industry_scoring_matrix.INDUSTRY_SCORING_MATRIX",
-    "contact": "config.scoring.contact_scoring_matrix.CONTACT_SCORING_MATRIX",
-    # Extend as needed
-}
+from typing import Any, Dict, List, Optional
+from utils.schema import AgentEvent  # Pfad anpassen, falls nötig
 
 
 class PromptQualityAgent:
     def __init__(self, openai_client=None, scoring_matrix_name: str = "raw"):
-        self.openai_client = openai_client
+        self.client = openai_client
         self.scoring_matrix_name = scoring_matrix_name
-
-        # Dynamically import the correct matrix
-        if scoring_matrix_name not in SCORING_MATRICES:
-            raise ValueError(f"Unknown scoring matrix: {scoring_matrix_name}")
-        mod_path, var_name = SCORING_MATRICES[scoring_matrix_name].rsplit(".", 1)
-        module = importlib.import_module(mod_path)
-        self.scoring_matrix = getattr(module, var_name)
 
     def run(
         self,
@@ -44,36 +26,83 @@ class PromptQualityAgent:
         base_name: str,
         iteration: int,
         prompt_version: str,
-        meta: Dict[str, Any],
+        meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
         score, issues = self._score_prompt(prompt_text)
         passed = score >= 0.9
-
+        feedback = "" if passed else "; ".join(issues)
         payload = {
             "score": score,
-            "matrix": self.scoring_matrix,
-            "feedback": "" if passed else f"Issues: {issues}",
+            "scoring_matrix": self.scoring_matrix_name,
+            "feedback": feedback,
             "pass_threshold": passed,
             "issues": issues,
         }
-
         return AgentEvent(
             name="PromptQualityAgent",
-            version="1.1.0",
+            version="1.2.0",
             timestamp=None,
             step="quality_evaluation",
             prompt_version=prompt_version,
             status="pass" if passed else "fail",
             payload=payload,
-            meta=meta,
+            meta=meta or {},
         )
 
-    def _score_prompt(self, prompt_text: str):
-        # Dummy: All criteria positive, but here plug in your scoring logic!
-        issues = []
+    def _score_prompt(self, prompt_text: str) -> (float, List[str]):
         score = 1.0
-        for criterion in self.scoring_matrix:
-            # Implement actual NLP or regex-based checks here for real QC!
-            # If fails, append to issues.
-            continue
+        issues = []
+
+        # 1. Required Sections
+        if "objective" not in prompt_text:
+            score -= 0.2
+            issues.append("Missing 'objective' section.")
+        if "input_format" not in prompt_text:
+            score -= 0.2
+            issues.append("Missing 'input_format' section.")
+        if "output_format" not in prompt_text:
+            score -= 0.2
+            issues.append("Missing 'output_format' section.")
+
+        # 2. Structure & Formatting (simple YAML keys check)
+        if not self._has_proper_structure(prompt_text):
+            score -= 0.1
+            issues.append("Improper section structure or missing YAML keys.")
+
+        # 3. Language Quality (dummy, extend with NLP or LLM as needed)
+        if not self._is_grammatically_correct(prompt_text):
+            score -= 0.1
+            issues.append("Potential grammar or clarity issues detected.")
+
+        # 4. Completeness (dummy, extend with coverage checks as needed)
+        if not self._is_comprehensive(prompt_text):
+            score -= 0.1
+            issues.append("Prompt lacks coverage of relevant aspects.")
+
+        # 5. Relevance (dummy, extend with keyword/topic checks as needed)
+        if not self._is_relevant(prompt_text):
+            score -= 0.1
+            issues.append("Prompt may contain irrelevant information.")
+
+        score = max(score, 0.0)
         return score, issues
+
+    def _has_proper_structure(self, text: str) -> bool:
+        """Minimal YAML section check; can be replaced with real YAML loader."""
+        must_have = ["role:", "objective:", "input_format:", "output_format:"]
+        return all(k in text for k in must_have)
+
+    def _is_grammatically_correct(self, text: str) -> bool:
+        """Dummy: always returns True. Integrate NLP/LLM check for real implementation."""
+        # TODO: Implement grammar check with LLM or rule-based method
+        return True
+
+    def _is_comprehensive(self, text: str) -> bool:
+        """Dummy: always returns True. Extend for coverage of required fields or typical attributes."""
+        # TODO: Implement check for all key aspects present (domain specific)
+        return True
+
+    def _is_relevant(self, text: str) -> bool:
+        """Dummy: always returns True. Could scan for banned terms, off-topic content."""
+        # TODO: Implement relevance check with heuristics or LLM
+        return True

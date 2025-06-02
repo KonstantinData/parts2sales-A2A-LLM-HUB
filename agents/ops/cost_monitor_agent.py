@@ -1,102 +1,58 @@
 """
-CostMonitorAgent
+cost_monitor_agent.py
 
-Monitors API usage (tokens, costs) and optionally cache statistics.
-Returns results as AgentEvent with CostMonitorResult as payload.
+Purpose : Monitors, aggregates, and reports LLM API costs and token usage during workflow runs.
+Version : 0.1.0-raw
+Author  : Konstantin & AI Copilot
+Notes   :
+- Designed for pluggable cost tracking across prompt lifecycle/agents.
+- Supports per-agent and total workflow cost reporting.
+- Integrates with OpenAI client responses (token usage, pricing).
 
-Notes:
-------
-- Reads from OpenAI usage endpoints and (optionally) Redis/memory cache.
-- Logs all cost/usage metrics as events (easy to push to analytics/monitoring).
-- Can be called periodically (batch run, scheduled job, etc.).
+Example:
+    agent = CostMonitorAgent()
+    event = agent.run(agent_name="PromptQualityAgent", tokens_used=1054, cost=0.003, meta={...})
 """
 
-import os
-import time
-from typing import Any, Dict, Optional
-from agents.utils.schemas import AgentEvent, BaseModel, Field
-
-
-class CostMonitorResult(BaseModel):
-    """
-    Result schema for cost and usage monitoring.
-    """
-
-    period: str = Field(
-        ..., description="Reporting period (e.g. '2024-06-07', 'batch_15', ...)"
-    )
-    total_tokens: int = Field(..., description="Total tokens used in period")
-    total_cost_usd: float = Field(..., description="Total OpenAI API cost (USD)")
-    cache_hitrate: Optional[float] = Field(
-        None, description="Cache hitrate if available"
-    )
-    details: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional monitoring details (per-model usage, etc.)",
-    )
+from typing import Dict, Any, Optional
+from agents.utils.schemas import AgentEvent
+from datetime import datetime
 
 
 class CostMonitorAgent:
-    def __init__(
-        self,
-        openai_client,
-        cache=None,
-        agent_name="CostMonitorAgent",
-        agent_version="1.0",
-    ):
-        self.openai = openai_client
-        self.cache = cache  # Optional: pass Redis or cache interface
-        self.agent_name = agent_name
-        self.agent_version = agent_version
+    def __init__(self):
+        self.agent_name = "CostMonitorAgent"
+        self.agent_version = "0.1.0-raw"
+        self.total_cost = 0.0
+        self.total_tokens = 0
 
     def run(
-        self, period: str, prompt_version: str = None, meta: dict = None
+        self,
+        agent_name: str,
+        tokens_used: int,
+        cost: float,
+        prompt_version: Optional[str] = None,
+        step_id: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
-        """
-        Collects and logs cost/usage metrics for the specified period.
-        """
-        meta = meta or {}
-        total_tokens, total_cost_usd, details = self._collect_openai_usage(period)
-        cache_hitrate = self._get_cache_hitrate() if self.cache else None
-        result = CostMonitorResult(
-            period=period,
-            total_tokens=total_tokens,
-            total_cost_usd=total_cost_usd,
-            cache_hitrate=cache_hitrate,
-            details=details,
-        )
-        event = AgentEvent(
-            event_type="cost_monitor",
+        self.total_cost += cost
+        self.total_tokens += tokens_used
+
+        payload = {
+            "agent_name": agent_name,
+            "tokens_used": tokens_used,
+            "cost": cost,
+            "total_cost": self.total_cost,
+            "total_tokens": self.total_tokens,
+        }
+
+        return AgentEvent(
+            event_type="cost_monitoring",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
-            step_id=meta.get("step_id", ""),
+            timestamp=datetime.utcnow(),
+            step_id=step_id or "cost_monitoring",
             prompt_version=prompt_version,
-            meta=meta,
-            payload=result.dict(),
+            meta=meta or {},
+            payload=payload,
         )
-        return event
-
-    def _collect_openai_usage(self, period: str):
-        """
-        Example: Collects usage from OpenAI API for this account.
-        Replace with real usage collection as needed (organization, team, etc.).
-        """
-        # This is an example! Replace with your real org/usage API as needed.
-        usage = (
-            self.openai.api_usage()
-        )  # Replace by actual usage endpoint if available!
-        total_tokens = usage.get("total_tokens", 0)
-        total_cost = usage.get("total_cost", 0.0)
-        return total_tokens, total_cost, usage
-
-    def _get_cache_hitrate(self):
-        """
-        Example: Collect cache stats (from Redis or memory cache).
-        """
-        if hasattr(self.cache, "info"):
-            stats = self.cache.info()
-            hits = stats.get("keyspace_hits", 0)
-            misses = stats.get("keyspace_misses", 0)
-            total = hits + misses
-            return hits / total if total else None
-        return None
