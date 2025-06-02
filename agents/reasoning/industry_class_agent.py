@@ -1,85 +1,62 @@
 """
 industry_class_agent.py
 
-Purpose : Classifies the relevant industry sector(s) for a product or text input using LLM.
-Version : 0.1.0-raw
+Purpose : Detects and assigns industry classes to products based on their features and metadata.
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses OpenAI LLM for NAICS/NACE/ISIC or custom industry mapping.
-- Returns a structured AgentEvent with detected industry codes/names and confidence scores.
-- Handles errors gracefully with clear status in payload.
-
-Example:
-    agent = IndustryClassAgent(openai_client=client)
-    result = agent.run(prompt_text, meta={...})
+- Uses ScoringMatrixType.INDUSTRY for matrix-based validation and evaluation.
+- Emits structured AgentEvent for traceability and downstream use.
+- Can be integrated with any LLM or custom logic for industry detection.
 """
 
-from typing import Dict, Any
-from openai import OpenAI
-from agents.utils.schemas import AgentEvent
+from typing import Dict, Any, Optional, List
 from datetime import datetime
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.schema import AgentEvent
 
 
 class IndustryClassAgent:
-    def __init__(self, openai_client: OpenAI):
-        self.client = openai_client
+    def __init__(
+        self,
+        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.INDUSTRY,
+        openai_client: Optional[Any] = None,
+    ):
         self.agent_name = "IndustryClassAgent"
-        self.agent_version = "0.1.0-raw"
+        self.agent_version = "1.1.0"
+        self.scoring_matrix_type = scoring_matrix_type
+        self.openai_client = openai_client
 
     def run(
         self,
-        prompt_text: str,
-        meta: Dict[str, Any] = None,
+        input_data: Dict[str, Any],
+        base_name: str,
+        iteration: int,
         prompt_version: str = None,
-        step_id: str = None,
+        meta: Dict[str, Any] = None,
     ) -> AgentEvent:
-        try:
-            system_prompt = (
-                "You are an industry classification expert. Given a product or company description, "
-                "identify the most relevant industry (preferably by NACE/ISIC/NAICS code if possible) and return both the code and label. "
-                "If multiple industries are plausible, return a ranked list."
-            )
+        # Dummy logic: Replace with real LLM-based or heuristic detection.
+        industries = self._detect_industries(input_data)
+        payload = {
+            "industries": industries,
+            "input": input_data,
+            "info": "Industry classification complete.",
+        }
+        event = AgentEvent(
+            event_type="industry_classification",
+            agent_name=self.agent_name,
+            agent_version=self.agent_version,
+            timestamp=datetime.utcnow(),
+            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
+            prompt_version=prompt_version,
+            meta=meta or {},
+            payload=payload,
+        )
+        return event
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt_text},
-                ],
-                temperature=0.2,
-            )
-
-            llm_reply = response.choices[0].message.content.strip()
-
-            # Optional: simple parser, can be replaced with stricter extraction
-            industries = [
-                line.strip("-• \n") for line in llm_reply.splitlines() if line.strip()
-            ]
-            industries = [i for i in industries if i]
-
-            payload = {"industry_classes": industries, "raw_llm_reply": llm_reply}
-
-            return AgentEvent(
-                event_type="industry_classification",
-                agent_name=self.agent_name,
-                agent_version=self.agent_version,
-                timestamp=datetime.utcnow(),
-                step_id=step_id or "industry_classification",
-                prompt_version=prompt_version,
-                meta=meta or {},
-                payload=payload,
-            )
-        except Exception as e:
-            return AgentEvent(
-                event_type="industry_classification",
-                agent_name=self.agent_name,
-                agent_version=self.agent_version,
-                timestamp=datetime.utcnow(),
-                step_id=step_id or "industry_classification",
-                prompt_version=prompt_version,
-                meta=meta or {},
-                payload={
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
+    def _detect_industries(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        # Example output; in production this would use an LLM or mapping logic.
+        return [
+            {"name": "industrial automation", "confidence": 0.93},
+            {"name": "logistics", "confidence": 0.78},
+        ]

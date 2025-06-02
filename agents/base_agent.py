@@ -1,14 +1,13 @@
 """
 base_agent.py
 
-Purpose : Abstract base class for all LLM agents (standardized interface).
-Version : 1.0.0
+Purpose : Abstract base class for all agent types in the system; enforces unified agent interface.
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
-- All agents must implement `run()`
-- Promotes pluggability and unified integration in pipelines
-- Add agent name for unique identification/logging
-- Subclass in: PromptQualityAgent, PromptImprovementAgent, ControllerAgent, etc.
+- Each agent must subclass BaseAgent and implement `run()`.
+- Enforces plug-and-play, type-safe workflow integration.
+- Use for static typing, documentation, and future extension (e.g., logging, hooks).
 """
 
 from abc import ABC, abstractmethod
@@ -18,13 +17,13 @@ class BaseAgent(ABC):
     """Abstract base class for all LLM agents."""
 
     def __init__(self, name: str):
-        self.name = name
+        self.name = name  # Each agent can be uniquely identified
 
     @abstractmethod
     def run(self, *args, **kwargs):
         """
-        Execute the main logic of the agent.
+        Executes the main logic of the agent.
         Returns:
-            Any (score, artifact, result object, etc.)
+            Any: Can be a score, improved artifact, or evaluation event.
         """
         pass

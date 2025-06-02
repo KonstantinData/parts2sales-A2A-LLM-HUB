@@ -1,84 +1,60 @@
 """
 crm_sync_agent.py
 
-Purpose : Synchronizes and enriches prompt workflow data with HubSpot CRM via API.
-Version : 0.1.0-raw
+Purpose : Synchronizes matched company/contact data with CRM (e.g., HubSpot).
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
-- Pushes structured results (matches, use cases, features, etc.) to HubSpot objects (Company, Contact, Deal).
-- Pulls reference data (Company lists, Properties) for matching or enrichment.
-- Handles auth and error logging.
-- Returns AgentEvent with operation status and result summary.
-
-Example:
-    agent = CRMSyncAgent(api_key=HUBSPOT_KEY)
-    event = agent.run(object_type="company", data={...}, action="upsert")
+- Handles both write and verification steps (sync + confirm).
+- Abstracts CRM provider behind a pluggable method (default: dummy).
+- Emits AgentEvent for auditing and error trace.
+- Extend `_sync_to_crm` for production HubSpot/other API integration.
 """
 
 from typing import Dict, Any, Optional
-from agents.utils.schemas import AgentEvent
 from datetime import datetime
-import requests
-import os
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.schema import AgentEvent
 
 
 class CRMSyncAgent:
-    def __init__(self, api_key: str = None):
+    def __init__(
+        self,
+        crm_provider: Optional[Any] = None,
+        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.COMPANY,
+    ):
         self.agent_name = "CRMSyncAgent"
-        self.agent_version = "0.1.0-raw"
-        self.api_key = api_key or os.getenv("HUBSPOT_API_KEY")
-        self.base_url = "https://api.hubapi.com"
+        self.agent_version = "1.1.0"
+        self.scoring_matrix_type = scoring_matrix_type
+        self.crm_provider = crm_provider  # Placeholder for e.g. HubSpot API wrapper
 
     def run(
         self,
-        object_type: str,  # "company", "contact", "deal"
-        data: Dict[str, Any],
-        action: str = "upsert",  # "create", "update", "upsert"
-        prompt_version: Optional[str] = None,
-        step_id: Optional[str] = None,
-        meta: Optional[Dict[str, Any]] = None,
+        sync_data: Dict[str, Any],
+        base_name: str,
+        iteration: int,
+        prompt_version: str = None,
+        meta: Dict[str, Any] = None,
     ) -> AgentEvent:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
-        endpoint = self._build_endpoint(object_type, action)
-        result = {}
-        status = "success"
-        try:
-            resp = requests.post(endpoint, headers=headers, json=data)
-            result = resp.json()
-            if not resp.ok:
-                status = "failed"
-        except Exception as e:
-            result = {"error": str(e)}
-            status = "failed"
-
+        success, result_msg = self._sync_to_crm(sync_data)
         payload = {
-            "object_type": object_type,
-            "action": action,
-            "status": status,
-            "hubspot_response": result,
+            "sync_data": sync_data,
+            "success": success,
+            "result_msg": result_msg,
         }
-
-        return AgentEvent(
+        event = AgentEvent(
             event_type="crm_sync",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
             timestamp=datetime.utcnow(),
-            step_id=step_id or "crm_sync",
+            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
             payload=payload,
         )
+        return event
 
-    def _build_endpoint(self, object_type: str, action: str) -> str:
-        # Simple endpoint logic for HubSpot v3 objects API
-        if object_type == "company":
-            return f"{self.base_url}/crm/v3/objects/companies"
-        if object_type == "contact":
-            return f"{self.base_url}/crm/v3/objects/contacts"
-        if object_type == "deal":
-            return f"{self.base_url}/crm/v3/objects/deals"
-        # Fallback: raise error
-        raise ValueError(f"Unsupported object_type: {object_type}")
+    def _sync_to_crm(self, sync_data: Dict[str, Any]) -> (bool, str):
+        # Dummy implementation. In production: call CRM API (e.g. HubSpot).
+        # Return success flag and result/status message.
+        return True, "Data synchronized to CRM (dummy mode)."

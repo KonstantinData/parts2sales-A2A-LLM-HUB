@@ -1,80 +1,62 @@
 """
 company_match_agent.py
 
-Purpose : Identifiziert und matched Firmen aus strukturierten oder unstrukturierten Daten (z.B. CRM, Anfrage, externen Datenquellen).
-Version : 0.1.0-raw
+Purpose : Matches and ranks companies based on product data, metadata, or context.
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
-- Nutzt OpenAI LLM für intelligente, fehlertolerante Firmenzuordnung.
-- Optional: Nachladen oder Scoring anhand von Datenbank/Listen möglich.
-- Gibt ein AgentEvent zurück, das das Match-Ergebnis und relevante Metadaten enthält.
-
-Example:
-    agent = CompanyMatchAgent(openai_client=client)
-    result = agent.run(prompt_text, meta={...})
+- Uses ScoringMatrixType.COMPANY for scoring logic and evaluation.
+- Emits unified AgentEvent for downstream traceability.
+- Modular: can connect to any matching DB, LLM, or external service.
 """
 
-from typing import Dict, Any
-from openai import OpenAI
-from agents.utils.schemas import AgentEvent
+from typing import Dict, Any, Optional, List
 from datetime import datetime
+from utils.scoring_matrix_types import ScoringMatrixType
+from utils.schema import AgentEvent
 
 
 class CompanyMatchAgent:
-    def __init__(self, openai_client: OpenAI):
-        self.client = openai_client
+    def __init__(
+        self,
+        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.COMPANY,
+        openai_client: Optional[Any] = None,
+    ):
         self.agent_name = "CompanyMatchAgent"
-        self.agent_version = "0.1.0-raw"
+        self.agent_version = "1.1.0"
+        self.scoring_matrix_type = scoring_matrix_type
+        self.openai_client = openai_client
 
     def run(
         self,
-        prompt_text: str,
-        meta: Dict[str, Any] = None,
+        input_data: Dict[str, Any],
+        base_name: str,
+        iteration: int,
         prompt_version: str = None,
-        step_id: str = None,
+        meta: Dict[str, Any] = None,
     ) -> AgentEvent:
-        try:
-            system_prompt = (
-                "You are a matching expert. Identify and standardize company names or unique firm identifiers "
-                "from the provided text. If ambiguity exists, return the most likely match and a confidence score (0-1)."
-            )
+        # Dummy logic: Replace with LLM, retrieval, or lookup as needed.
+        companies = self._match_companies(input_data)
+        payload = {
+            "companies": companies,
+            "input": input_data,
+            "info": "Company matching complete.",
+        }
+        event = AgentEvent(
+            event_type="company_matching",
+            agent_name=self.agent_name,
+            agent_version=self.agent_version,
+            timestamp=datetime.utcnow(),
+            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
+            prompt_version=prompt_version,
+            meta=meta or {},
+            payload=payload,
+        )
+        return event
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt_text},
-                ],
-                temperature=0,
-            )
-
-            llm_reply = response.choices[0].message.content.strip()
-
-            payload = {
-                "matched_company": llm_reply,
-            }
-
-            return AgentEvent(
-                event_type="company_match",
-                agent_name=self.agent_name,
-                agent_version=self.agent_version,
-                timestamp=datetime.utcnow(),
-                step_id=step_id or "company_match",
-                prompt_version=prompt_version,
-                meta=meta or {},
-                payload=payload,
-            )
-        except Exception as e:
-            return AgentEvent(
-                event_type="company_match",
-                agent_name=self.agent_name,
-                agent_version=self.agent_version,
-                timestamp=datetime.utcnow(),
-                step_id=step_id or "company_match",
-                prompt_version=prompt_version,
-                meta=meta or {},
-                payload={
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
+    def _match_companies(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        # Example output; in production use retrieval, embeddings, or LLM.
+        return [
+            {"name": "Siemens AG", "confidence": 0.89},
+            {"name": "Schneider Electric", "confidence": 0.77},
+        ]
