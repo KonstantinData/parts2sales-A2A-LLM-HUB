@@ -1,24 +1,24 @@
 """
 prompt_improvement_agent.py
 
-Purpose : Improves prompts using LLM and internal logic. Logs all events per workflow session as JSONL.
+Purpose : Improves prompts based on quality feedback using LLM or custom logic.
+Logging : Logs all events (success and error) into a centralized JSONL workflow log via JsonlEventLogger.
 
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
-# - Centralized workflow-based JSONL logging (JsonlEventLogger).
-# - Every agent action, including errors, is captured as an AgentEvent.
-# - No scattered file writes, no legacy output – only one structured log per workflow.
-# - Follows compliance, monitoring, and debugging best practices.
+# - Accepts feedback from quality checks to inform improvements.
+# - Uses injected OpenAIClient for LLM interactions.
+# - Centralizes all event logging per workflow/session.
 """
 
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
-from utils.openai_client import OpenAIClient
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
+from utils.openai_client import OpenAIClient
 
 
 class PromptImprovementAgent:
@@ -29,44 +29,48 @@ class PromptImprovementAgent:
         log_dir=Path("logs/workflows"),
     ):
         """
-        improvement_strategy: defines how prompt improvement is performed (your own logic/type)
+        improvement_strategy: defines the type of improvement logic ('LLM', 'RULE_BASED', etc.)
         openai_client: injected OpenAIClient instance
-        log_dir: workflow log storage (default: logs/workflows)
+        log_dir: directory for workflow logs (default: logs/workflows)
         """
         self.improvement_strategy = improvement_strategy
         self.llm = openai_client
         self.log_dir = log_dir
 
     def run(
-        self, prompt_path: Path, base_name: str, iteration: int, workflow_id: str = None
+        self,
+        prompt_path: Path,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        feedback: str = "",
     ):
         """
-        Entry point for prompt improvement task.
-        All events are appended to the workflow JSONL log.
+        Runs prompt improvement using the specified strategy and feedback.
+        Logs all events to the centralized JSONL workflow log.
         """
         if workflow_id is None:
             workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Read prompt
+            # Read current prompt content
             with open(prompt_path, "r", encoding="utf-8") as f:
                 prompt_content = f.read()
 
-            # --- Perform improvement (LLM or custom logic)
-            improved_prompt = self.improve_prompt(prompt_content)
+            # Improve prompt using feedback and strategy
+            improved_prompt = self.improve_prompt(prompt_content, feedback)
 
             payload = {
                 "original_prompt": prompt_content,
                 "improved_prompt": improved_prompt,
-                "feedback": "",
+                "feedback": feedback,
             }
 
-            # --- Log success event
             event = AgentEvent(
                 event_type="prompt_improvement",
                 agent_name="PromptImprovementAgent",
-                agent_version="1.2.0",
+                agent_version="1.3.1",
                 timestamp=datetime.utcnow(),
                 step_id="improvement",
                 prompt_version=base_name,
@@ -86,7 +90,7 @@ class PromptImprovementAgent:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptImprovementAgent",
-                agent_version="1.2.0",
+                agent_version="1.3.1",
                 timestamp=datetime.utcnow(),
                 step_id="improvement",
                 prompt_version=base_name,
@@ -103,12 +107,40 @@ class PromptImprovementAgent:
             logger.log_event(error_event)
             raise
 
-    def improve_prompt(self, prompt_content):
+    def improve_prompt(self, prompt_content: str, feedback: str = "") -> str:
         """
-        Your custom prompt improvement logic.
-        Here: simple pass-through or LLM-based enhancement (replace this with real logic).
+        Use LLM to improve the prompt based on quality feedback.
+
+        Args:
+            prompt_content: Original prompt text.
+            feedback: Feedback string from quality evaluation describing weaknesses.
+
+        Returns:
+            Improved prompt text.
         """
-        # Example: Just return prompt_content for now, or call self.llm with your logic.
-        # improved = self.llm.improve_prompt(prompt_content)
-        # return improved
-        return prompt_content  # Placeholder
+
+        full_prompt = (
+            "You are a prompt engineer. Improve the given prompt using the feedback.\n\n"
+            f"Original prompt:\n{prompt_content}\n\n"
+            f"Feedback:\n{feedback}\n\n"
+            "Please rewrite the prompt to address the feedback."
+        )
+
+        response = self.llm.chat_completion(
+            prompt=full_prompt,
+            max_tokens=512,
+            temperature=0.7,
+        )
+
+        improved_prompt = ""
+        if response.choices and len(response.choices) > 0:
+            choice = response.choices[0]
+            if hasattr(choice, "message") and hasattr(choice.message, "content"):
+                improved_prompt = choice.message.content.strip()
+            elif hasattr(choice, "text"):
+                improved_prompt = choice.text.strip()
+
+        if not improved_prompt:
+            improved_prompt = prompt_content
+
+        return improved_prompt

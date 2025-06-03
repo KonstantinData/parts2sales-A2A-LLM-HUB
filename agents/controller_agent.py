@@ -8,8 +8,8 @@ Author  : Konstantin Milonas with support from AI Copilot
 # Notes:
 # - Centralized workflow-based JSONL logging (JsonlEventLogger).
 # - Every workflow control, delegation, and error is logged as a structured AgentEvent.
-# - No legacy or scattered file output, only compliant, scalable per-session logging.
-# - Ideal for monitoring, debugging, and auditing complex workflows.
+# - Orchestrates agent execution via an injected agent_registry.
+# - Only workflow-centric, append-only JSONL output – compliant & auditable.
 """
 
 from pathlib import Path
@@ -83,8 +83,7 @@ class ControllerAgent:
 
                 # Execute agent step (pass workflow_id through!)
                 agent_event = agent.run(**step["params"], workflow_id=workflow_id)
-                # Log agent return event if not already logged inside agent
-                # (Optional: Can be skipped if subagents handle their own logging.)
+                # Optionally log agent return (if not already logged inside agent)
 
             # Workflow completed event
             completion_event = AgentEvent(

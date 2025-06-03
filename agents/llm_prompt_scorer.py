@@ -24,7 +24,7 @@ from utils.openai_client import OpenAIClient
 class LLMPromptScorer:
     def __init__(
         self,
-        scoring_matrix,
+        scoring_matrix: dict,
         openai_client: OpenAIClient,
         log_dir=Path("logs/workflows"),
     ):
@@ -37,36 +37,77 @@ class LLMPromptScorer:
         self.llm = openai_client
         self.log_dir = log_dir
 
+    def _calculate_score(self, llm_result: str) -> float:
+        """
+        Calculates a numeric score based on the presence of positive and negative keywords defined
+        in the scoring matrix.
+
+        Returns a float between 0 and 1.
+        """
+        score = 0.0
+        total_weight = 0.0
+
+        # Score positive keywords
+        for kw in self.scoring_matrix.get("keywords", []):
+            if kw.lower() in llm_result.lower():
+                score += self.scoring_matrix["weights"].get("keywords", 0.0)
+            total_weight += abs(self.scoring_matrix["weights"].get("keywords", 0.0))
+
+        # Deduct score for negative keywords
+        for nkw in self.scoring_matrix.get("negative_keywords", []):
+            if nkw.lower() in llm_result.lower():
+                score += self.scoring_matrix["weights"].get("negative_keywords", 0.0)
+            total_weight += abs(
+                self.scoring_matrix["weights"].get("negative_keywords", 0.0)
+            )
+
+        if total_weight == 0:
+            return 0.0
+
+        final_score = max(0.0, min(1.0, score / total_weight))
+        return final_score
+
     def run(
         self, prompt_path: Path, base_name: str, iteration: int, workflow_id: str = None
     ):
         """
-        Scores a prompt using LLM and the scoring matrix. Logs all actions and errors to workflow JSONL log.
+        Scores a prompt by sending it to the LLM and evaluating the response using the scoring matrix.
+        Logs the entire process as an AgentEvent in a centralized JSONL workflow log.
         """
         if workflow_id is None:
             workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Read prompt content
+            # Read prompt content
             with open(prompt_path, "r", encoding="utf-8") as f:
                 prompt_content = f.read()
 
-            # --- Score using LLM and matrix (you can expand this logic as needed)
-            llm_result = self.llm.chat_completion(prompt=prompt_content)
-            score = self._calculate_score(llm_result, self.scoring_matrix)
+            # Get LLM response
+            llm_response = self.llm.chat_completion(prompt=prompt_content)
+            llm_output = (
+                llm_response.choices[0].message.get("content", "")
+                if llm_response.choices
+                else ""
+            )
 
+            # Calculate score and determine pass/fail
+            score = self._calculate_score(llm_output)
+            pass_threshold = score >= self.scoring_matrix.get("threshold", 0.5)
+
+            # Prepare event payload
             payload = {
-                "llm_output": llm_result,
+                "llm_output": llm_output,
                 "score": score,
-                "matrix_used": str(self.scoring_matrix),
-                "feedback": "",
+                "pass_threshold": pass_threshold,
+                "feedback": "",  # Optional feedback can be added here
             }
 
+            # Log success event
             event = AgentEvent(
                 event_type="llm_prompt_score",
                 agent_name="LLMPromptScorer",
-                agent_version="1.0.0",
+                agent_version="1.0.1",
                 timestamp=datetime.utcnow(),
                 step_id="scoring",
                 prompt_version=base_name,
@@ -83,10 +124,11 @@ class LLMPromptScorer:
         except Exception as ex:
             import traceback
 
+            # Log error event
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="LLMPromptScorer",
-                agent_version="1.0.0",
+                agent_version="1.0.1",
                 timestamp=datetime.utcnow(),
                 step_id="scoring",
                 prompt_version=base_name,
@@ -102,11 +144,3 @@ class LLMPromptScorer:
             )
             logger.log_event(error_event)
             raise
-
-    def _calculate_score(self, llm_result, scoring_matrix):
-        """
-        Your scoring logic goes here.
-        Replace this with your own evaluation rules.
-        """
-        # Example: return dummy score for now
-        return 1.0
