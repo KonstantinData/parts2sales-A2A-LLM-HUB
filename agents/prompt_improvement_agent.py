@@ -2,13 +2,13 @@
 prompt_improvement_agent.py
 
 Purpose : Agent for improving prompts based on LLM feedback and weighted rationale.
-Version : 1.1.2
+Version : 1.1.3
 Author  : Konstantin & AI Copilot
 Notes   :
-- Receives meta/feedback, uses LLM for guided rewriting.
-- Logs all improvement events exclusively to logs/weighted_score/
+- Receives meta/feedback, uses OpenAI LLM for guided rewriting (kein Dummy!).
+- Logs all improvement events exklusiv nach logs/weighted_score/
 - Usage:
-    agent = PromptImprovementAgent()
+    agent = PromptImprovementAgent(openai_client=client)
     agent.run(prompt_text, feedback, base_name, iteration, prompt_version)
 """
 
@@ -27,7 +27,7 @@ class PromptImprovementAgent:
         openai_client: Optional[Any] = None,
     ):
         self.agent_name = "PromptImprovementAgent"
-        self.agent_version = "1.1.2"
+        self.agent_version = "1.1.3"
         self.openai_client = openai_client
 
     def run(
@@ -54,11 +54,32 @@ class PromptImprovementAgent:
                 "feedback": feedback,
             },
         )
-        write_event_log(LOG_DIR, event)
+        write_event_log(event)
         return event
 
     def improve_prompt(self, prompt_text: str, feedback: str):
-        # Replace with actual LLM logic
-        improved = prompt_text + "\n# Improved based on feedback"
-        rationale = "Prompt rewritten to address feedback."
+        """
+        Actually uses the LLM (OpenAI) to rewrite prompt based on feedback.
+        """
+        if self.openai_client is None:
+            improved = prompt_text + "\n# [No OpenAI client: No improvement applied]"
+            rationale = "OpenAI client not set; dummy improvement only."
+        else:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert prompt engineer. Your task is to rewrite the given prompt according to the feedback. Return ONLY the improved prompt as markdown code block. Short rationale after.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Prompt to improve:\n{prompt_text}\n\nImprovement feedback:\n{feedback}",
+                    },
+                ],
+                temperature=0.3,
+                max_tokens=512,
+            )
+            improved = response.choices[0].message.content.strip()
+            rationale = f"LLM rewrite. Model: gpt-4-turbo, feedback: {feedback}"
         return improved, rationale

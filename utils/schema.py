@@ -1,8 +1,10 @@
+# utils/schema.py
+
 """
 schema.py
 
 Purpose : Central Pydantic schemas for all agent events and payloads.
-Version : 1.0.0
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
 - All agent interactions and logs use AgentEvent as the base contract.
@@ -21,6 +23,41 @@ class PromptQualityResult(BaseModel):
     feedback: str
     pass_threshold: bool
     issues: List[str] = Field(default_factory=list)
+    prompt_version: Optional[str] = None
+
+
+class FeatureExtractionResult(BaseModel):
+    features_extracted: Dict[str, Any]
+    feedback: str
+    pass_threshold: bool
+    prompt_version: Optional[str] = None
+
+
+class UsecaseDetectionResult(BaseModel):
+    detected_usecases: List[str]
+    feedback: str
+    pass_threshold: bool
+    prompt_version: Optional[str] = None
+
+
+class IndustryClassResult(BaseModel):
+    industry_classes: List[str]
+    feedback: str
+    pass_threshold: bool
+    prompt_version: Optional[str] = None
+
+
+class CompanyMatchResult(BaseModel):
+    matched_companies: List[str]
+    feedback: str
+    pass_threshold: bool
+    prompt_version: Optional[str] = None
+
+
+class ContactMatchResult(BaseModel):
+    matched_contacts: List[str]
+    feedback: str
+    pass_threshold: bool
     prompt_version: Optional[str] = None
 
 

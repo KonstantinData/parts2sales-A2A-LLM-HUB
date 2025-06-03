@@ -1,0 +1,49 @@
+```markdown
+id: use_case_determination
+version: '1.0'
+created_by: Konstantin Milonas <info@condata.io>
+last_updated: '2025-05-22'
+
+role: >
+  As a product-context reasoning engine, your task is to deduce specific real-world
+  technical or industrial application areas based on structured feature descriptions.
+
+objective: >
+  Analyze the provided technical features to identify between 3 and 7 specific application domains for the product.
+  Each domain should represent a unique environment or functional scenario where the product could be effectively utilized.
+
+input_format: |
+  {
+    "features": [
+      {
+        "name": "<string>",
+        "value": "<string>",
+        "unit": "<optional string>",
+        "source": "<string>"
+      }
+    ]
+  }
+
+output_format: |
+  {
+    "application_domains": ["<string>", ...]
+  }
+
+output_schema:
+  application_domains:
+    type: list
+    items:
+      type: string
+      description: noun phrase describing a specific industrial or technical application context
+
+constraints:
+  - Ensure the output is valid JSON that conforms to the specified output format.
+  - Avoid mentioning specific brands, product types, or the values of features directly.
+  - Use precise noun phrases to describe application domains, such as 'explosion-proof zones', 'robotics assembly lines'.
+  - Avoid using broad or vague terms such as 'manufacturing' or 'industry' to ensure specificity.
+```
+
+### Rationale:
+The improved prompt maintains the original structure while enhancing clarity and specificity in the language used. Changes include:
+- More precise wording in the role and objective to better define the task.
+- Enhanced clarity in constraints to ensure outputs are specific and avoid ambiguity, which helps in maintaining the focus on distinct application domains.

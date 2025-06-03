@@ -5,11 +5,11 @@
 
 # Default: run a single prompt template
 run:
-	python run_template_batch.py --file $(FILE)
+	python run_prompt_lifecycle.py --file $(FILE)
 
 # Run the full agent loop on all predefined prompts
 all:
-	python run_template_batch.py --all
+	python run_prompt_lifecycle.py --all
 
 # Clean all generated logs (except .gitkeep)
 clean:

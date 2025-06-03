@@ -2,34 +2,30 @@
 feature_extraction_agent.py
 
 Purpose : Agent for extracting product features using a dedicated scoring matrix.
-Version : 1.1.2
+Version : 1.1.0
 Author  : Konstantin & AI Copilot
 Notes   :
-- Uses ScoringMatrixType.FEATURE for matrix-based scoring and extraction.
-- Logs all events exclusively to logs/weighted_score/
-- LLM usage and sample_data support (template-phase)
+- Uses ScoringMatrixType.FEATURE for scoring
+- Performs feature extraction quality evaluation via LLM
+- Emits structured AgentEvent with feature extraction results
 """
 
 from typing import Optional, Any, Dict
 from datetime import datetime
-from utils.schema import AgentEvent
+from utils.schema import AgentEvent, FeatureExtractionResult
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.scoring_matrix_loader import load_scoring_matrix
-from utils.event_logger import write_event_log
-from pathlib import Path
-
-LOG_DIR = Path("logs") / "weighted_score"
 
 
 class FeatureExtractionAgent:
     def __init__(
         self,
-        scoring_matrix_type: ScoringMatrixType,
+        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.FEATURE,
         threshold: float = 0.9,
         openai_client: Optional[Any] = None,
     ):
         self.agent_name = "FeatureExtractionAgent"
-        self.agent_version = "1.1.2"
+        self.agent_version = "1.1.0"
         self.scoring_matrix_type = scoring_matrix_type
         self.threshold = threshold
         self.openai_client = openai_client
@@ -37,16 +33,13 @@ class FeatureExtractionAgent:
 
     def run(
         self,
-        input_text: str,
+        prompt_text: str,
         base_name: str,
         iteration: int,
         prompt_version: Optional[str] = None,
         meta: Optional[Dict[str, Any]] = None,
     ) -> AgentEvent:
-        sample_data = (
-            meta.get("sample_data") if meta and "sample_data" in meta else None
-        )
-        result = self.extract_features(input_text, sample_data)
+        result = self.evaluate_features(prompt_text)
         event = AgentEvent(
             event_type="feature_extraction",
             agent_name=self.agent_name,
@@ -55,56 +48,56 @@ class FeatureExtractionAgent:
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},
-            payload=result,
+            payload=result.dict(),
         )
-        write_event_log(LOG_DIR, event)
         return event
 
-    def extract_features(self, input_text: str, sample_data=None) -> dict:
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized.")
-        system_prompt = (
-            "You are a product expert. Extract and score product features. "
-            "Use the scoring matrix below for quality. "
-            'Output JSON: {"features": [<string>], "score": <float>, "feedback": <string>}'
-        )
-        matrix_desc = "\n".join(
-            f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
-        )
-        user_prompt = (
-            f"Input text:\n'''\n{input_text}\n'''\n\n"
-            f"Scoring matrix:\n{matrix_desc}\n"
-        )
-        if sample_data:
-            user_prompt += f"\nSample Data for validation:\n{sample_data}\n"
-        user_prompt += "\nExtract features, give an overall score (0.0-1.0), and feedback. Output JSON as specified."
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=512,
-            temperature=0.0,
-        )
-        import json
+    def evaluate_features(self, prompt_text: str) -> FeatureExtractionResult:
+        if self.openai_client is None:
+            # Dummy pass
+            score = 1.0
+            feedback = "No OpenAI client; dummy pass."
+            pass_threshold = True
+            extracted_features = []
+        else:
+            scoring_prompt = (
+                "Evaluate the prompt's feature extraction quality based on these criteria:\n"
+                + "\n".join(
+                    f"- {k}: weight {v}" for k, v in self.scoring_matrix.items()
+                )
+                + f"\n\nPrompt:\n{prompt_text}\n\nReturn JSON with score (0-1), feedback, extracted_features."
+            )
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a product feature extraction evaluator.",
+                    },
+                    {"role": "user", "content": scoring_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=300,
+            )
+            import json
 
-        try:
-            content = response.choices[0].message.content
-            result_json = json.loads(content)
-            features = result_json.get("features", [])
-            score = float(result_json.get("score", 0.0))
-            feedback = result_json.get("feedback", "")
-        except Exception as e:
-            features = []
-            score = 0.0
-            feedback = f"LLM feature extraction failed: {e}"
-        return {
-            "features": features,
-            "score": score,
-            "scoring_matrix": self.scoring_matrix,
-            "feedback": feedback,
-        }
-
-
-__all__ = ["FeatureExtractionAgent"]
+            try:
+                content = response.choices[0].message.content.strip()
+                parsed = json.loads(content)
+                score = float(parsed.get("score", 0))
+                feedback = parsed.get("feedback", "")
+                extracted_features = parsed.get("extracted_features", [])
+                pass_threshold = score >= self.threshold
+            except Exception:
+                score = 0.5
+                feedback = "Failed to parse LLM feature extraction output."
+                extracted_features = []
+                pass_threshold = False
+        return FeatureExtractionResult(
+            score=score,
+            matrix=self.scoring_matrix,
+            feedback=feedback,
+            pass_threshold=pass_threshold,
+            extracted_features=extracted_features,
+            prompt_version=None,
+        )

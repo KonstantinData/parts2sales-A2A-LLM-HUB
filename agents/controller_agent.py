@@ -56,7 +56,7 @@ class ControllerAgent:
             meta=meta or {},
             payload=payload,
         )
-        write_event_log(LOG_DIR, event)
+        write_event_log(event)
         return event
 
     def controller_decision(self, feedback: str) -> str:
