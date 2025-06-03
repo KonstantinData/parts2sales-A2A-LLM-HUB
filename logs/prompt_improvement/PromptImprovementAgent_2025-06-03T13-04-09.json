@@ -1,0 +1,18 @@
+{
+  "event_type": "prompt_improvement",
+  "agent_name": "PromptImprovementAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:04:09.439222",
+  "step_id": "prompt_improvement",
+  "prompt_version": "",
+  "meta": {
+    "updated_path": "prompts\\00-raw\\04_company_assign_raw_v0.1.0.yaml",
+    "iteration": 1
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "- Ensure the matching algorithm can handle a variety of inputs, including abbreviations, misspellings, and informal names.\n- Consider using a large, comprehensive database of registered companies to increase the likelihood of a successful match.\n- Implement a confidence scoring system to determine when a match is above the 90% confidence threshold.\n- Consider using machine learning techniques to improve the accuracy of matches over time.\n- Ensure the system can handle a high volume of queries quickly and efficiently.\n- Consider implementing a system to handle and learn from incorrect matches.\n- Ensure the system is robust and can handle a variety of edge cases.\n- Consider implementing a feedback loop to continuously improve the system based on user feedback and performance metrics.",
+    "updated_prompt": "- Ensure the matching algorithm can handle a variety of inputs, including abbreviations, misspellings, and informal names.\n- Consider using a large, comprehensive database of registered companies to increase the likelihood of a successful match.\n- Implement a confidence scoring system to determine when a match is above the 90% confidence threshold.\n- Consider using machine learning techniques to improve the accuracy of matches over time.\n- Ensure the system can handle a high volume of queries quickly and efficiently.\n- Consider implementing a system to handle and learn from incorrect matches.\n- Ensure the system is robust and can handle a variety of edge cases.\n- Consider implementing a feedback loop to continuously improve the system based on user feedback and performance metrics.",
+    "feedback_used": ""
+  }
+}

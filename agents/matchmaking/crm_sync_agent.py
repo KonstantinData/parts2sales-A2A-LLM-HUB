@@ -1,66 +1,25 @@
 """
 crm_sync_agent.py
 
-Purpose : Synchronizes matched company/contact data with CRM (e.g., HubSpot).
-Version : 1.1.1
-Author  : Konstantin & AI Copilot
+Purpose : Handles CRM synchronization tasks. Does not require OpenAIClient, as CRM sync is not LLM-based.
+Version : 1.3.0
+Author  : Konstantin’s AI Copilot
 Notes   :
-- Handles both write and verification steps (sync + confirm).
-- Abstracts CRM provider behind a pluggable method (default: dummy).
-- Logs all crm_sync events exclusively to logs/weighted_score/
-- Emits AgentEvent for auditing and error trace.
-- Extend `_sync_to_crm` for production HubSpot/other API integration.
+- No OpenAI or LLM dependency
+- Purely business/process logic for CRM updates or sync tasks
+Usage examples:
+    agent = CRMSyncAgent()
+    result = agent.run(data)
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
-from utils.schema import AgentEvent
-from utils.event_logger import write_event_log
-from pathlib import Path
-
-LOG_DIR = Path("logs") / "weighted_score"
+from typing import Any
 
 
 class CRMSyncAgent:
-    def __init__(
-        self,
-        crm_provider: Optional[Any] = None,
-        scoring_matrix_type: ScoringMatrixType = ScoringMatrixType.COMPANY,
-    ):
-        self.agent_name = "CRMSyncAgent"
-        self.agent_version = "1.1.1"
-        self.scoring_matrix_type = scoring_matrix_type
-        self.crm_provider = crm_provider  # Placeholder for e.g. HubSpot API wrapper
+    def __init__(self):
+        pass  # No OpenAIClient needed
 
-    def run(
-        self,
-        sync_data: Dict[str, Any],
-        base_name: str,
-        iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
-    ) -> AgentEvent:
-        success, result_msg = self._sync_to_crm(sync_data)
-        payload = {
-            "sync_data": sync_data,
-            "success": success,
-            "result_msg": result_msg,
-        }
-        event = AgentEvent(
-            event_type="crm_sync",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
-            timestamp=datetime.utcnow(),
-            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
-            prompt_version=prompt_version,
-            meta=meta or {},
-            payload=payload,
-        )
-        write_event_log(LOG_DIR, event)
-        return event
-
-    def _sync_to_crm(self, sync_data: Dict[str, Any]) -> (bool, str):
-        # Dummy implementation. In production: call CRM API (e.g. HubSpot).
-        # Return success flag and result/status message.
-        return True, "Data synchronized to CRM (dummy mode)."
+    def run(self, data: Any) -> Any:
+        # Place business logic for CRM sync here
+        # Implement sync/update logic as required by your workflow
+        return {"status": "success", "synced_records": 0}  # Dummy result

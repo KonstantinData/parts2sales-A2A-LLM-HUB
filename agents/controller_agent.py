@@ -1,66 +1,52 @@
 """
 controller_agent.py
 
-Purpose : Supervises the prompt lifecycle by aligning agent outputs, making retry/abort/continue decisions.
-Version : 1.1.2
-Author  : Konstantin & AI Copilot
+Purpose : Supervises the prompt lifecycle by aligning agent outputs, making retry/abort/continue decisions. Receives OpenAIClient via Dependency Injection.
+Version : 1.3.1
+Author  : Konstantin’s AI Copilot
 Notes   :
-- Accepts scoring matrix type as explicit Enum for max type safety.
-- Logs all controller events exclusively to logs/weighted_score/
-- May use scoring matrix in future for custom decision policies.
-- Core output is an AgentEvent with controller action ("retry", "abort", "continue").
+- Returns AgentEvent with correct fields for event logging.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 from datetime import datetime
-from utils.scoring_matrix_types import ScoringMatrixType
-from utils.schema import AgentEvent
-from utils.event_logger import write_event_log
-from pathlib import Path
-
-LOG_DIR = Path("logs") / "weighted_score"
+from utils.openai_client import OpenAIClient
+from utils.schemas import AgentEvent
 
 
 class ControllerAgent:
-    def __init__(
-        self,
-        scoring_matrix_type: Optional[ScoringMatrixType] = None,
-        openai_client: Optional[Any] = None,
-    ):
-        self.agent_name = "ControllerAgent"
-        self.agent_version = "1.1.2"
-        self.scoring_matrix_type = scoring_matrix_type
-        self.openai_client = openai_client
+    def __init__(self, openai_client: OpenAIClient):
+        self.llm = openai_client
 
-    def run(
-        self,
-        improved_prompt: str,
-        feedback: str,
-        base_name: str,
-        iteration: int,
-        prompt_version: str = None,
-        meta: Dict[str, Any] = None,
-    ) -> AgentEvent:
-        action = self.controller_decision(feedback)
+    def run(self, pq_event: Any, pi_event: Optional[Any] = None) -> AgentEvent:
+        retry = False
+        action = "continue"
+        if (
+            pq_event
+            and pq_event.payload
+            and not pq_event.payload.get("pass_threshold", True)
+        ):
+            retry = True
+            action = "retry"
         payload = {
+            "retry": retry,
             "action": action,
-            "feedback": feedback,
+        }
+        meta = {
+            "prompt_quality_id": getattr(pq_event, "meta", {}).get("log_id"),
+            "prompt_improvement_id": (
+                getattr(pi_event, "meta", {}).get("log_id") if pi_event else None
+            ),
         }
         event = AgentEvent(
             event_type="controller_decision",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
+            agent_name="ControllerAgent",
+            agent_version="1.3.1",
             timestamp=datetime.utcnow(),
-            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
-            prompt_version=prompt_version,
-            meta=meta or {},
+            step_id="controller_decision",
+            prompt_version=getattr(pq_event, "prompt_version", ""),
+            status="success",
             payload=payload,
+            meta=meta,
         )
-        write_event_log(event)
         return event
-
-    def controller_decision(self, feedback: str) -> str:
-        # TODO: Extend with real LLM/heuristic; for now: abort if "fatal" in feedback, else retry
-        if "fatal" in feedback.lower():
-            return "abort"
-        return "retry"

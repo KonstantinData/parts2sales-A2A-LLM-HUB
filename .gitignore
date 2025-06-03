@@ -49,8 +49,9 @@ coverage.xml
 # ----------------------------------------
 # Daten & Logs
 # ----------------------------------------
-
+# Exclude all files in /data from git
 data/
+data/outputs/
 *.log
 *.pdf
 

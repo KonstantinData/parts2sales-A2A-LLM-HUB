@@ -1,0 +1,18 @@
+{
+  "event_type": "prompt_improvement",
+  "agent_name": "PromptImprovementAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:00:08.328740",
+  "step_id": "prompt_improvement",
+  "prompt_version": "",
+  "meta": {
+    "updated_path": "prompts\\00-raw\\00_feature_setup_raw_v0.1.0.yaml",
+    "iteration": 1
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "- Ensure that the features extracted are relevant to the product and can be used to distinguish it from other products.\n- Avoid including generic features that could apply to any product.\n- Be specific and precise in naming the features. For example, instead of just saying \"size\", specify whether it's the height, width, or length.\n- If possible, include the range or limits of the features. For example, instead of just saying \"temperature\", specify the operating temperature range.\n- When extracting features from the part number, make sure they are actual features and not just part of the product's identification code.\n- Be consistent in the format and units used for the features. For example, if one feature is given in millimeters, don't give another feature in inches.\n- If the product has any certifications or complies with any standards, these can also be included as features.",
+    "updated_prompt": "- Ensure that the features extracted are relevant to the product and can be used to distinguish it from other products.\n- Avoid including generic features that could apply to any product.\n- Be specific and precise in naming the features. For example, instead of just saying \"size\", specify whether it's the height, width, or length.\n- If possible, include the range or limits of the features. For example, instead of just saying \"temperature\", specify the operating temperature range.\n- When extracting features from the part number, make sure they are actual features and not just part of the product's identification code.\n- Be consistent in the format and units used for the features. For example, if one feature is given in millimeters, don't give another feature in inches.\n- If the product has any certifications or complies with any standards, these can also be included as features.",
+    "feedback_used": ""
+  }
+}

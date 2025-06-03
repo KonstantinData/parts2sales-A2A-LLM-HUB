@@ -1,0 +1,17 @@
+{
+  "event_type": "controller_decision",
+  "agent_name": "ControllerAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:03:03.388376",
+  "step_id": "controller_decision",
+  "prompt_version": "03_industry_class",
+  "meta": {
+    "prompt_quality_id": "03_industry_class_2_2025-06-03T15-02-55",
+    "prompt_improvement_id": null
+  },
+  "status": "success",
+  "payload": {
+    "retry": true,
+    "action": "retry"
+  }
+}

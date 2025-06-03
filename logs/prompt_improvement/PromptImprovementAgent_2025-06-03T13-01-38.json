@@ -1,0 +1,18 @@
+{
+  "event_type": "prompt_improvement",
+  "agent_name": "PromptImprovementAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:01:38.431517",
+  "step_id": "prompt_improvement",
+  "prompt_version": "",
+  "meta": {
+    "updated_path": "prompts\\00-raw\\01_usecase_detect_raw_v0.1.0.yaml",
+    "iteration": 1
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "- Ensure that the output is specific and detailed. For example, instead of saying \"manufacturing\", specify the type of manufacturing like \"automotive manufacturing\" or \"pharmaceutical manufacturing\".\n- Avoid using jargon or technical terms that may not be easily understood by non-experts.\n- Make sure that the application domains are realistic and feasible based on the provided features.\n- Consider the potential impact of the product's features on different industries or sectors. For example, a product with energy-saving features could be useful in industries where energy consumption is a major concern.\n- Be creative and think outside the box. The product's features may have potential applications in unexpected areas.",
+    "updated_prompt": "- Ensure that the output is specific and detailed. For example, instead of saying \"manufacturing\", specify the type of manufacturing like \"automotive manufacturing\" or \"pharmaceutical manufacturing\".\n- Avoid using jargon or technical terms that may not be easily understood by non-experts.\n- Make sure that the application domains are realistic and feasible based on the provided features.\n- Consider the potential impact of the product's features on different industries or sectors. For example, a product with energy-saving features could be useful in industries where energy consumption is a major concern.\n- Be creative and think outside the box. The product's features may have potential applications in unexpected areas.",
+    "feedback_used": ""
+  }
+}

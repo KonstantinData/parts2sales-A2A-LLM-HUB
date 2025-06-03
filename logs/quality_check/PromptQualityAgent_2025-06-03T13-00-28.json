@@ -1,0 +1,19 @@
+{
+  "event_type": "quality_check",
+  "agent_name": "PromptQualityAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:00:28.337847",
+  "step_id": "quality_evaluation",
+  "prompt_version": "00_feature_setup",
+  "meta": {
+    "iteration": 2,
+    "scoring_matrix_type": "FEATURE",
+    "log_id": "00_feature_setup_2_2025-06-03T15-00-08"
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "**Example 1**\n\nInput:\n\n```json\n{\n  \"part_number\": \"123-XYZ\",\n  \"title\": \"XYZ 123 LED Bulb, 60W, 800 Lumens, E26 Base, 5000K Daylight White, Non-Dimmable, Pack of 6\",\n  \"manufacturer\": \"XYZ Lighting\"\n}\n```\n\nOutput:\n\n```json\n{\n  \"features\": [\n    {\n      \"name\": \"product type\",\n      \"value\": \"LED bulb\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"power\",\n      \"value\": \"60\",\n      \"unit\": \"w\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"luminous flux\",\n      \"value\": \"800\",\n      \"unit\": \"lm\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"base type\",\n      \"value\": \"E26\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"color temperature\",\n      \"value\": \"5000\",\n      \"unit\": \"k\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"dimming capability\",\n      \"value\": \"non-dimmable\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"package quantity\",\n      \"value\": \"6\",\n      \"source\": \"title\"\n    }\n  ]\n}\n```\n\n**Example 2**\n\nInput:\n\n```json\n{\n  \"part_number\": \"AB-1001\",\n  \"title\": \"AB Motors 1001 Industrial Motor, 3 Phase, 5 HP, 230/460V, 60 Hz, 1800 RPM, TEFC, NEMA Frame 184T\",\n  \"manufacturer\": \"AB Motors\"\n}\n```\n\nOutput:\n\n```json\n{\n  \"features\": [\n    {\n      \"name\": \"product type\",\n      \"value\": \"industrial motor\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"phase\",\n      \"value\": \"3\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"power\",\n      \"value\": \"5\",\n      \"unit\": \"hp\",\n      \"source\": \"title\"\n    },\n    {\n      \"name\": \"voltage\",\n      \"value\": \"230/460\",\n      \"unit\": \"v\",\n      \"source\": \"title\"\n    },\n",
+    "pass_threshold": false,
+    "feedback": ""
+  }
+}

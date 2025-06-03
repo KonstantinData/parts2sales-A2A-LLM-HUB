@@ -1,0 +1,19 @@
+{
+  "event_type": "quality_check",
+  "agent_name": "PromptQualityAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:02:45.841613",
+  "step_id": "quality_evaluation",
+  "prompt_version": "03_industry_class",
+  "meta": {
+    "iteration": 1,
+    "scoring_matrix_type": "INDUSTRY",
+    "log_id": "03_industry_class_1_2025-06-03T15-02-42"
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "{\n  \"company_name\": \"Tesla, Inc.\",\n  \"business_description\": \"Tesla, Inc. designs, manufactures, and sells high-performance electric vehicles and electric vehicle powertrain components. The Company owns its sales and service network and sells electric powertrain components to other automobile manufacturers.\"\n}",
+    "pass_threshold": false,
+    "feedback": ""
+  }
+}

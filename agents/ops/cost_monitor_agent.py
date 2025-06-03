@@ -12,7 +12,7 @@ Notes   :
 
 from typing import Dict, Any, Optional
 from datetime import datetime
-from utils.schema import AgentEvent
+from utils.schemas import AgentEvent
 from utils.event_logger import write_event_log
 from pathlib import Path
 

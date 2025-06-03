@@ -1,10 +1,8 @@
-# utils/schema.py
-
 """
-schema.py
+schemas.py
 
 Purpose : Central Pydantic schemas for all agent events and payloads.
-Version : 1.1.0
+Version : 1.2.0
 Author  : Konstantin & AI Copilot
 Notes   :
 - All agent interactions and logs use AgentEvent as the base contract.
@@ -69,6 +67,7 @@ class AgentEvent(BaseModel):
     step_id: str
     prompt_version: Optional[str] = None
     meta: Dict[str, Any] = Field(default_factory=dict)
+    status: str = "success"  # <--- added for compatibility with agents
     payload: Dict[str, Any]
 
     class Config:

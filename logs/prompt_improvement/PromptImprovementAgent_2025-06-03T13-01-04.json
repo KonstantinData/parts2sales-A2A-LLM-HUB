@@ -1,0 +1,18 @@
+{
+  "event_type": "prompt_improvement",
+  "agent_name": "PromptImprovementAgent",
+  "agent_version": "1.3.1",
+  "timestamp": "2025-06-03T13:01:04.320951",
+  "step_id": "prompt_improvement",
+  "prompt_version": "",
+  "meta": {
+    "updated_path": "prompts\\00-raw\\00_feature_setup_raw_v0.1.0.yaml",
+    "iteration": 1
+  },
+  "status": "success",
+  "payload": {
+    "llm_output": "- Ensure that the extracted features are relevant to the product. Avoid including generic or vague features.\n- Be consistent in the format and structure of the extracted features. This includes maintaining consistency in the use of units, abbreviations, and terminology.\n- Be thorough in extracting features from all available sources - the part number, title, and manufacturer. Do not overlook potential features in any of these sources.\n- Be precise in identifying the source of each feature. This helps in maintaining the credibility and traceability of the information.\n- Avoid including subjective or qualitative features. Stick to objective, measurable, and technical attributes.\n- Ensure that the features are presented in a clear and understandable manner. Avoid using jargon or complex technical terms without explanation.",
+    "updated_prompt": "- Ensure that the extracted features are relevant to the product. Avoid including generic or vague features.\n- Be consistent in the format and structure of the extracted features. This includes maintaining consistency in the use of units, abbreviations, and terminology.\n- Be thorough in extracting features from all available sources - the part number, title, and manufacturer. Do not overlook potential features in any of these sources.\n- Be precise in identifying the source of each feature. This helps in maintaining the credibility and traceability of the information.\n- Avoid including subjective or qualitative features. Stick to objective, measurable, and technical attributes.\n- Ensure that the features are presented in a clear and understandable manner. Avoid using jargon or complex technical terms without explanation.",
+    "feedback_used": ""
+  }
+}
