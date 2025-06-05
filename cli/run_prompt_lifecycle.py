@@ -16,18 +16,16 @@ Author  : Konstantin Milonas with support from AI Copilot
 
 import sys
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.time_utils import cet_now
 import argparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from utils.openai_client import OpenAIClient
 from utils.prompt_versioning import (
     clean_base_name,
-    parse_version_from_yaml,
     extract_version,
 )
 from utils.scoring_matrix_types import ScoringMatrixType
@@ -36,7 +34,6 @@ from utils.schemas import AgentEvent
 
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
-from agents.controller_agent import ControllerAgent
 
 from utils.improvement_strategies import ImprovementStrategy
 
@@ -59,7 +56,6 @@ def evaluate_and_improve_prompt(
     workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
     logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
 
-    base_version = parse_version_from_yaml(path)
     iteration = 0
     current_path = path
     prev_score = None  # Track previous quality score for early stopping
@@ -130,9 +126,7 @@ def evaluate_and_improve_prompt(
         if prev_score is not None:
             score_diff = score - prev_score
             if current_version == prev_version or score_diff < 0.01:
-                print(
-                    "⛔️ Early stop: version unchanged or score improvement < 0.01"
-                )
+                print("⛔️ Early stop: version unchanged or score improvement < 0.01")
                 stop_event = AgentEvent(
                     event_type="early_stop",
                     agent_name="LifecycleManager",

@@ -7,31 +7,45 @@ Unit test for PromptQualityAgent
 """
 
 import unittest
-from agents.core.prompt_quality_agent import PromptQualityAgent
+import tempfile
+from pathlib import Path
+
+from agents.prompt_quality_agent import PromptQualityAgent
+from utils.scoring_matrix_types import ScoringMatrixType
 
 
 class TestPromptQualityAgent(unittest.TestCase):
 
     def setUp(self):
-        self.agent = PromptQualityAgent()
+        self.agent = PromptQualityAgent(ScoringMatrixType.RAW, None)
+
+    def _run_prompt(self, text: str):
+        with tempfile.NamedTemporaryFile("w+", delete=False) as tmp:
+            tmp.write(text)
+            tmp.flush()
+            path = Path(tmp.name)
+        try:
+            return self.agent.run(path, path.stem, 0)
+        finally:
+            path.unlink()
 
     def test_matrix_score(self):
         prompt = "Fill the fields: {name}, {desc}."
-        result = self.agent.score_prompt(prompt, method="matrix")
-        self.assertTrue(0 <= result.total <= 1)
-        self.assertEqual(result.method, "matrix")
+        event = self._run_prompt(prompt)
+        score = event.payload.get("score", 0)
+        self.assertTrue(0 <= score <= 1)
 
     def test_llm_score(self):
         prompt = "Clear and concise: {foo}, {bar}."
-        result = self.agent.score_prompt(prompt, method="llm")
-        self.assertTrue(0 <= result.total <= 1)
-        self.assertEqual(result.method, "llm")
+        event = self._run_prompt(prompt)
+        score = event.payload.get("score", 0)
+        self.assertTrue(0 <= score <= 1)
 
     def test_hybrid_score(self):
         prompt = "Brief: {a}, {b}."
-        result = self.agent.score_prompt(prompt, method="hybrid")
-        self.assertTrue(0 <= result.total <= 1)
-        self.assertEqual(result.method, "hybrid")
+        event = self._run_prompt(prompt)
+        score = event.payload.get("score", 0)
+        self.assertTrue(0 <= score <= 1)
 
 
 if __name__ == "__main__":
