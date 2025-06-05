@@ -24,7 +24,8 @@ import argparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import clean_base_name, parse_version_from_yaml
+from utils.prompt_versioning import clean_base_name
+from utils.semantic_versioning_utils import parse_version_from_yaml, bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
 
@@ -124,7 +125,17 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(improvement_event)
 
-        # 4. current_path auf verbesserten Prompt-Pfad umstellen
+        # 4. Version bump tracking
+        old_version = base_version
+        # The improvement agent returns the bumped version in the event meta.
+        # Fall back to a computed bump if it is missing for any reason.
+        new_version = improvement_event.meta.get("new_version") or bump(old_version, "patch")
+
+        # Update our loop variable so the next iteration shows the new version
+        base_version = new_version
+        print(f"📈 Version bump: {old_version} -> {new_version}")
+
+        # 5. current_path auf verbesserten Prompt-Pfad umstellen
         if "updated_path" in improvement_event.meta:
             current_path = Path(improvement_event.meta["updated_path"])
         else:
