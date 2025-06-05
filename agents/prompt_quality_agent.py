@@ -61,8 +61,10 @@ class PromptQualityAgent:
                 prompt_path, base_name, iteration, workflow_id
             )
 
-            # Enrich the event if needed or just return it
+            # Log the scoring event
             logger.log_event(score_event)
+
+            # Return event including dynamic feedback in payload
             return score_event
 
         except Exception as ex:

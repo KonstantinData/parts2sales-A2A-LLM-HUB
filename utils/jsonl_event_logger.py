@@ -1,30 +1,26 @@
 import json
 from pathlib import Path
 from datetime import datetime
+from enum import Enum
 
 
 class JsonlEventLogger:
-    def __init__(self, workflow_id: str, log_dir: Path):
-        self.logfile = log_dir / f"{workflow_id}.jsonl"
-        self.logfile.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, workflow_id: str, log_dir):
+        self.log_path = log_dir / f"{workflow_id}.jsonl"
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log_event(self, event):
-        """Append event (as dict or Pydantic model) to the workflow JSONL file."""
-
-        def default(obj):
-            if isinstance(obj, datetime):
-                return obj.isoformat()
-            if isinstance(obj, Path):
-                return str(obj)  # <--- Das ist der Fix!
+        def default(o):
+            if isinstance(o, Enum):
+                return o.name  # Oder o.value, je nach Wunsch
+            if hasattr(o, "isoformat"):
+                return o.isoformat()
             raise TypeError(
-                f"Object of type {type(obj).__name__} is not JSON serializable"
+                f"Object of type {type(o).__name__} is not JSON serializable"
             )
 
-        with open(self.logfile, "a", encoding="utf-8") as f:
-            if hasattr(event, "model_dump"):
-                f.write(json.dumps(event.model_dump(), default=default) + "\n")
-            else:
-                f.write(json.dumps(event, default=default) + "\n")
+        with open(self.log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event.model_dump(), default=default) + "\n")
 
 
 """

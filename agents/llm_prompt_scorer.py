@@ -67,6 +67,16 @@ class LLMPromptScorer:
         final_score = max(0.0, min(1.0, score / total_weight))
         return final_score
 
+    def _extract_feedback(self, llm_output: str) -> str:
+        """
+        Simple example method to extract dynamic feedback from the LLM output text.
+        You can extend this with NLP parsing, keyword extraction, or structured prompts.
+        """
+        # For demo: return a short snippet or summary from the output
+        if len(llm_output) > 200:
+            return llm_output[:200] + "..."
+        return llm_output
+
     def run(
         self, prompt_path: Path, base_name: str, iteration: int, workflow_id: str = None
     ):
@@ -95,19 +105,22 @@ class LLMPromptScorer:
             score = self._calculate_score(llm_output)
             pass_threshold = score >= self.scoring_matrix.get("threshold", 0.5)
 
+            # Extract dynamic, context-sensitive feedback
+            feedback = self._extract_feedback(llm_output)
+
             # Prepare event payload
             payload = {
                 "llm_output": llm_output,
                 "score": score,
                 "pass_threshold": pass_threshold,
-                "feedback": "",  # Optional feedback can be added here
+                "feedback": feedback,
             }
 
             # Log success event
             event = AgentEvent(
                 event_type="llm_prompt_score",
                 agent_name="LLMPromptScorer",
-                agent_version="1.0.1",
+                agent_version="1.1.0",
                 timestamp=datetime.utcnow(),
                 step_id="scoring",
                 prompt_version=base_name,
@@ -128,7 +141,7 @@ class LLMPromptScorer:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="LLMPromptScorer",
-                agent_version="1.0.1",
+                agent_version="1.1.0",
                 timestamp=datetime.utcnow(),
                 step_id="scoring",
                 prompt_version=base_name,

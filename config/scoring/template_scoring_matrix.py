@@ -1,23 +1,62 @@
 """
-Template Scoring Matrix
+Template Design Scoring Matrix
 
-Defines evaluation criteria and weights for prompt templates prior to execution.
-Focuses on prompt clarity, structure, constraints, reasoning, and user alignment.
+Evaluation matrix for validating prompt templates before runtime. Focuses on clarity, structure, composability, and user alignment.
 
 Usage:
-- Used by PromptQualityAgent when scoring template stage prompts.
-- Separate from scoring schemes that evaluate LLM output quality.
+- Used by PromptQualityAgent to evaluate prompt templates.
+- Focused on pre-execution prompt logic and structure.
 """
 
 SCORING_MATRIX = {
-    "task_clarity": 1.0,  # Is the task clearly described?
-    "output_spec": 1.0,  # Is the expected output format specified?
-    "structure_check": 0.9,  # Is the prompt structurally consistent (e.g., YAML format)?
-    "constraint_clarity": 1.1,  # Are constraints or rules clearly defined?
-    "reasoning_scope": 1.2,  # Does the prompt support traceable reasoning?
-    "evalability": 1.3,  # Is the output evaluable?
-    "ambiguity_avoidance": 1.0,  # Does the prompt avoid ambiguous phrasing?
-    "domain_alignment": 0.8,  # Is the prompt aligned with its domain (e.g., B2B context)?
-    "composability": 0.7,  # Is the prompt modular and extendable?
-    "user_alignment": 1.2,  # Is the prompt aligned with the intended user need?
+    "task_clarity": {
+        "weight": 1.0,
+        "description": "Is the task or instruction clearly stated and unambiguous?",
+        "feedback": "Prompt task unclear. Define goals explicitly and simply.",
+    },
+    "output_spec": {
+        "weight": 1.0,
+        "description": "Is the expected output format defined and consistent?",
+        "feedback": "Expected output format missing or inconsistent. Define expected structure (e.g., YAML, JSON, list).",
+    },
+    "structure_check": {
+        "weight": 0.9,
+        "description": "Is the prompt structurally valid (e.g., indentations, headers)?",
+        "feedback": "Prompt structure flawed. Correct layout and syntax to avoid confusion.",
+    },
+    "constraint_clarity": {
+        "weight": 1.1,
+        "description": "Are task constraints or rules clearly stated and enforceable?",
+        "feedback": "Constraints unclear or missing. Explicitly list any rules or limits for the task.",
+    },
+    "reasoning_scope": {
+        "weight": 1.2,
+        "description": "Does the prompt allow for traceable or explainable reasoning?",
+        "feedback": "Prompt does not support reasoning transparency. Encourage reasoning or chain-of-thought in the output.",
+    },
+    "evalability": {
+        "weight": 1.3,
+        "description": "Can the output be easily evaluated for correctness and quality?",
+        "feedback": "Output is hard to evaluate. Guide format and content for better assessability.",
+    },
+    "ambiguity_avoidance": {
+        "weight": 1.0,
+        "description": "Does the prompt avoid vague or ambiguous phrasing?",
+        "feedback": "Prompt is ambiguous. Use clearer phrasing or examples to clarify.",
+    },
+    "domain_alignment": {
+        "weight": 0.8,
+        "description": "Is the prompt aligned with its domain or context?",
+        "feedback": "Prompt appears misaligned with its use case. Adapt vocabulary or examples to match the domain.",
+    },
+    "composability": {
+        "weight": 0.7,
+        "description": "Is the prompt modular and reusable across contexts?",
+        "feedback": "Prompt is too rigid. Design it to support variation or modular integration.",
+    },
+    "user_alignment": {
+        "weight": 1.2,
+        "description": "Is the prompt aligned with user needs or usage context?",
+        "feedback": "Prompt misaligned with user needs. Refactor to reflect typical user expectations or roles.",
+    },
 }

@@ -2,7 +2,7 @@
 run_prompt_lifecycle.py
 
 Purpose : Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
-Version : 1.4.0
+Version : 1.4.1
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
@@ -22,9 +22,8 @@ import argparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import parse_version_from_yaml, clean_base_name
+from utils.prompt_versioning import clean_base_name, parse_version_from_yaml
 from utils.scoring_matrix_types import ScoringMatrixType
-
 from utils.jsonl_event_logger import JsonlEventLogger
 
 from agents.prompt_quality_agent import PromptQualityAgent
@@ -77,13 +76,14 @@ def evaluate_and_improve_prompt(
             f"🔍 Processing {current_path.name} (iteration {iteration} | version {base_version})"
         )
 
-        matrix_name = clean_base_name(current_path.name)
-        matrix_name_cleaned = matrix_name.lower().lstrip("0123456789_")
-        matrix_key = matrix_lookup.get(matrix_name_cleaned)
+        matrix_name = clean_base_name(current_path.name)  # CLEAN BASE NAME
+        matrix_key = matrix_lookup.get(matrix_name)
+
         if not matrix_key:
             raise ValueError(
                 f"Unknown or unmapped matrix name '{matrix_name}'. Please update 'matrix_lookup' mapping."
             )
+
         try:
             matrix_type = ScoringMatrixType[matrix_key]
         except KeyError:

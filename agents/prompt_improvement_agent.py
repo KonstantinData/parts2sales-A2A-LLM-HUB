@@ -1,15 +1,16 @@
 """
 prompt_improvement_agent.py
 
-Purpose : Improves prompts based on quality feedback using LLM or custom logic.
-Logging : Logs all events (success and error) into a centralized JSONL workflow log via JsonlEventLogger.
+Purpose : Improves prompts based on dynamic feedback from quality evaluation using LLM.
+Logging : Logs all improvement events and errors into centralized workflow JSONL log via JsonlEventLogger.
 
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
-# - Accepts feedback from quality checks to inform improvements.
-# - Uses injected OpenAIClient for LLM interactions.
-# - Centralizes all event logging per workflow/session.
+# - Accepts dynamic, context-sensitive feedback for prompt improvement.
+# - Uses LLM to rewrite prompts guided by feedback.
+# - Ensures all events are traceably logged per workflow/session.
+# - Supports multiple improvement strategies for extensibility.
 """
 
 from pathlib import Path
@@ -29,83 +30,13 @@ class PromptImprovementAgent:
         log_dir=Path("logs/workflows"),
     ):
         """
-        improvement_strategy: defines the type of improvement logic ('LLM', 'RULE_BASED', etc.)
+        improvement_strategy: logic or type for prompt improvement (e.g., 'LLM', 'RULE_BASED', etc.)
         openai_client: injected OpenAIClient instance
-        log_dir: directory for workflow logs (default: logs/workflows)
+        log_dir: workflow log storage (default: logs/workflows)
         """
         self.improvement_strategy = improvement_strategy
         self.llm = openai_client
         self.log_dir = log_dir
-
-    def run(
-        self,
-        prompt_path: Path,
-        base_name: str,
-        iteration: int,
-        workflow_id: str = None,
-        feedback: str = "",
-    ):
-        """
-        Runs prompt improvement using the specified strategy and feedback.
-        Logs all events to the centralized JSONL workflow log.
-        """
-        if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
-        logger = JsonlEventLogger(workflow_id, self.log_dir)
-
-        try:
-            # Read current prompt content
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                prompt_content = f.read()
-
-            # Improve prompt using feedback and strategy
-            improved_prompt = self.improve_prompt(prompt_content, feedback)
-
-            payload = {
-                "original_prompt": prompt_content,
-                "improved_prompt": improved_prompt,
-                "feedback": feedback,
-            }
-
-            event = AgentEvent(
-                event_type="prompt_improvement",
-                agent_name="PromptImprovementAgent",
-                agent_version="1.3.1",
-                timestamp=datetime.utcnow(),
-                step_id="improvement",
-                prompt_version=base_name,
-                status="success",
-                payload=payload,
-                meta={
-                    "iteration": iteration,
-                    "improvement_strategy": str(self.improvement_strategy),
-                },
-            )
-            logger.log_event(event)
-            return event
-
-        except Exception as ex:
-            import traceback
-
-            error_event = AgentEvent(
-                event_type="error",
-                agent_name="PromptImprovementAgent",
-                agent_version="1.3.1",
-                timestamp=datetime.utcnow(),
-                step_id="improvement",
-                prompt_version=base_name,
-                status="error",
-                payload={
-                    "exception": str(ex),
-                    "traceback": traceback.format_exc(),
-                },
-                meta={
-                    "iteration": iteration,
-                    "improvement_strategy": str(self.improvement_strategy),
-                },
-            )
-            logger.log_event(error_event)
-            raise
 
     def improve_prompt(self, prompt_content: str, feedback: str = "") -> str:
         """
@@ -132,15 +63,87 @@ class PromptImprovementAgent:
             temperature=0.7,
         )
 
-        improved_prompt = ""
-        if response.choices and len(response.choices) > 0:
-            choice = response.choices[0]
-            if hasattr(choice, "message") and hasattr(choice.message, "content"):
-                improved_prompt = choice.message.content.strip()
-            elif hasattr(choice, "text"):
-                improved_prompt = choice.text.strip()
+        improved_prompt = response.choices[0].message.get("content", "").strip()
 
         if not improved_prompt:
             improved_prompt = prompt_content
 
         return improved_prompt
+
+    def run(
+        self,
+        prompt_path: Path,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        feedback: str = "",
+    ):
+        """
+        Runs the prompt improvement process.
+        Logs all events into the centralized workflow JSONL log.
+        """
+        if workflow_id is None:
+            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+        logger = JsonlEventLogger(workflow_id, self.log_dir)
+
+        try:
+            # Read current prompt
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                prompt_content = f.read()
+
+            # Improve prompt using LLM guided by feedback
+            improved_prompt = self.improve_prompt(prompt_content, feedback=feedback)
+
+            # Optionally, save improved prompt to a new file (not mandatory)
+            updated_path = (
+                prompt_path.parent / f"{base_name}_improved_iter{iteration}.yaml"
+            )
+            with open(updated_path, "w", encoding="utf-8") as f:
+                f.write(improved_prompt)
+
+            payload = {
+                "original_prompt": prompt_content,
+                "improved_prompt": improved_prompt,
+                "updated_path": str(updated_path),
+                "feedback_used": feedback,
+            }
+
+            event = AgentEvent(
+                event_type="prompt_improvement",
+                agent_name="PromptImprovementAgent",
+                agent_version="1.0.0",
+                timestamp=datetime.utcnow(),
+                step_id="improvement",
+                prompt_version=base_name,
+                status="success",
+                payload=payload,
+                meta={
+                    "iteration": iteration,
+                    "improvement_strategy": self.improvement_strategy,
+                },
+            )
+            logger.log_event(event)
+            return event
+
+        except Exception as ex:
+            import traceback
+
+            error_event = AgentEvent(
+                event_type="error",
+                agent_name="PromptImprovementAgent",
+                agent_version="1.0.0",
+                timestamp=datetime.utcnow(),
+                step_id="improvement",
+                prompt_version=base_name,
+                status="error",
+                payload={
+                    "exception": str(ex),
+                    "traceback": traceback.format_exc(),
+                },
+                meta={
+                    "iteration": iteration,
+                    "improvement_strategy": self.improvement_strategy,
+                },
+            )
+            logger.log_event(error_event)
+            raise
