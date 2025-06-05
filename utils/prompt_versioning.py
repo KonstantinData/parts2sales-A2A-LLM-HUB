@@ -140,3 +140,16 @@ def clean_base_name(filename: str) -> str:
     E.g. 'feature_setup_raw_v0.1.0.yaml' → 'feature_setup'
     """
     return re.sub(r"_(raw|templ|config|active)_v\d+\.\d+\.\d+\.yaml$", "", filename)
+
+
+def improvement_filename(base_path: Path, iteration: int) -> Path:
+    """
+    Erzeugt einen konsistenten Pfad für verbesserte Prompts,
+    z.B. 'feature_setup_raw_v0.1.0_improved_iter1.yaml' – auch wenn der Input schon improved ist.
+    """
+    name = base_path.name
+    # Entferne '_improved_iterN' falls vorhanden (egal wie oft verbessert)
+    cleaned = re.sub(r"_improved_iter\d+", "", name)
+    # An cleaned Namen Suffix anhängen
+    new_name = cleaned.replace(".yaml", f"_improved_iter{iteration}.yaml")
+    return base_path.parent / new_name

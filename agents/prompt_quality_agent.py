@@ -50,6 +50,7 @@ class PromptQualityAgent:
         """
         Runs the prompt quality evaluation by delegating to LLMPromptScorer.
         Logs events under the workflow JSONL log.
+        Ensures structured feedback (list) for downstream improvement agent.
         """
         if workflow_id is None:
             workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
@@ -61,10 +62,18 @@ class PromptQualityAgent:
                 prompt_path, base_name, iteration, workflow_id
             )
 
-            # Log the scoring event
-            logger.log_event(score_event)
+            # *** Begin patch: ensure feedback is always a list ***
+            feedback = score_event.payload.get("feedback", [])
+            if isinstance(feedback, str):
+                # Split by newlines if multiline string, else wrap in list
+                feedback = [line for line in feedback.split("\n") if line.strip()]
+            if not feedback:
+                # Force at least an empty list for feedback
+                feedback = []
+            score_event.payload["feedback"] = feedback
+            # *** End patch ***
 
-            # Return event including dynamic feedback in payload
+            logger.log_event(score_event)
             return score_event
 
         except Exception as ex:
@@ -73,7 +82,7 @@ class PromptQualityAgent:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.4.0",
+                agent_version="1.4.3",
                 timestamp=datetime.utcnow(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,

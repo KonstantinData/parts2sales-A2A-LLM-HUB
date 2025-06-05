@@ -34,13 +34,13 @@ from utils.improvement_strategies import ImprovementStrategy
 
 # Mapping: layer name -> improvement strategy
 improvement_strategy_lookup = {
+    "raw": ImprovementStrategy.LLM,
+    "template": ImprovementStrategy.LLM,
     "feature_setup": ImprovementStrategy.LLM,
     "usecase_detect": ImprovementStrategy.RULE_BASED,
     "industry_class": ImprovementStrategy.LLM,
     "company_assign": ImprovementStrategy.RULE_BASED,
     "contact_assign": ImprovementStrategy.LLM,
-    "template": ImprovementStrategy.LLM,
-    "raw": ImprovementStrategy.LLM,
 }
 
 
@@ -56,13 +56,13 @@ def evaluate_and_improve_prompt(
     current_path = path
 
     matrix_lookup = {
+        "raw": "RAW",
+        "template": "TEMPLATE",
         "feature_setup": "FEATURE",
         "usecase_detect": "USECASE",
         "industry_class": "INDUSTRY",
         "company_assign": "COMPANY",
         "contact_assign": "CONTACT",
-        "template": "TEMPLATE",
-        "raw": "RAW",
     }
 
     layer_cleaned = layer.lower().lstrip("0123456789_")
@@ -70,7 +70,7 @@ def evaluate_and_improve_prompt(
         layer_cleaned, ImprovementStrategy.LLM
     )
 
-    while iteration < 3:
+    while iteration < 7:
         iteration += 1
         print(
             f"🔍 Processing {current_path.name} (iteration {iteration} | version {base_version})"
@@ -99,26 +99,7 @@ def evaluate_and_improve_prompt(
             improvement_strategy=improvement_strategy, openai_client=openai_client
         )
 
-        # 2. Registry anlegen
-        registry = {
-            "quality": quality_agent,
-            "improvement": improvement_agent,
-            # weitere Agenten je nach Workflow
-        }
-
-        # 3. Steps für den Controller bauen
-        workflow_steps = [
-            {
-                "type": "quality",
-                "params": {
-                    "prompt_path": current_path,
-                    "base_name": matrix_name,
-                    "iteration": iteration,
-                },
-            }
-        ]
-
-        # Vorab Quality ausführen, um pass_threshold zu kennen
+        # 2. Quality Agent laufen lassen
         pq_event = quality_agent.run(
             current_path,
             base_name=matrix_name,
@@ -127,31 +108,30 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(pq_event)
 
-        if not pq_event.payload["pass_threshold"]:
-            workflow_steps.append(
-                {
-                    "type": "improvement",
-                    "params": {
-                        "prompt_path": current_path,
-                        "base_name": matrix_name,
-                        "iteration": iteration,
-                        "feedback": pq_event.payload["feedback"],
-                    },
-                }
-            )
-
-        # 4. Controller-Agent erzeugen und Workflow laufen lassen
-        controller_agent = ControllerAgent(agent_registry=registry)
-        controller_agent.run(workflow_steps, workflow_id=workflow_id)
-
         if pq_event.payload["pass_threshold"]:
             print("✅ Prompt passed quality threshold.")
             break
 
-        # Optional: current_path nach Improvement aktualisieren
-        # (z.B. aus improvement_event.meta["updated_path"] lesen, falls deine Agents das unterstützen)
+        # 3. Improvement Agent laufen lassen, falls Threshold nicht erreicht
+        improvement_event = improvement_agent.run(
+            prompt_path=current_path,
+            base_name=matrix_name,
+            iteration=iteration,
+            workflow_id=workflow_id,
+            feedback=pq_event.payload["feedback"],
+        )
+        logger.log_event(improvement_event)
 
-        if iteration >= 3:
+        # 4. current_path auf verbesserten Prompt-Pfad umstellen
+        if "updated_path" in improvement_event.meta:
+            current_path = Path(improvement_event.meta["updated_path"])
+        else:
+            print(
+                "⚠️ No updated_path found in improvement_event.meta. Stopping iteration."
+            )
+            break
+
+        if iteration >= 7:
             print("⛔️ Max iterations reached. Aborting.")
 
 
