@@ -10,7 +10,7 @@ The system orchestrates autonomous LLM agents for evaluation, improvement, valid
 
 - **Agentic Prompt Lifecycle:** Automated processing from RAW to PRODUCTION (incl. research loop, scoring, improvement, controller supervision).
 - **Strict Versioning:** Complete support for semantic versioning, auto-increment, promotion, patch bump, and archiving.
-- **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum). Raw prompts can optionally be scored via the LLM itself.
+ - **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum). Raw prompts can optionally be scored via the LLM itself by enabling the `use_llm` flag in `LLMPromptScorer`.
 - **Pluggable Agents:** Clearly separated, easily extensible agent classes (Quality, Improvement, Controller, Extraction, Matchmaking, Reasoning, Ops).
 - **Event Logging & Audit Trail:** Every action, score, or improvement is logged as an AgentEvent in JSON with timestamp and version.
 - **Archiving:** Automatic archiving of prompts after every stage transition.
@@ -110,6 +110,7 @@ THRESHOLD=0.90
 MAX_ITERATIONS=3
 HUBSPOT_API_KEY=your-key   # Optional, if CRM sync is enabled
 LOG_LEVEL=INFO
+USE_LLM_SCORING=true      # Enable LLM-based checks for RAW prompts
 ```
 
 ## Getting Started
