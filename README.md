@@ -132,7 +132,7 @@ python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.y
 ## Advanced
 
 - **Scoring Matrix:** Use via Enum `ScoringMatrixType` (in `utils/scoring_matrix_types.py`), type-checked, customizable per agent.
-- **LLM-based scoring:** When `use_llm=True` the quality agent sends prompt and criterion text to OpenAI and interprets the reply as pass/fail (enabled for RAW prompts).
+- **LLM-based scoring:** When `use_llm=True` the quality agent sends prompt and criterion text to OpenAI and interprets the reply as pass/fail (enabled for all prompt stages).
 - **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
 - **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
 

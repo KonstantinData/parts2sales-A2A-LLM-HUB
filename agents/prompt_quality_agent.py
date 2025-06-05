@@ -47,7 +47,7 @@ class PromptQualityAgent:
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
-            use_llm=self.scoring_matrix_type == ScoringMatrixType.RAW,
+            use_llm=True,
         )
 
     def run(
