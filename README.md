@@ -10,7 +10,7 @@ The system orchestrates autonomous LLM agents for evaluation, improvement, valid
 
 - **Agentic Prompt Lifecycle:** Automated processing from RAW to PRODUCTION (incl. research loop, scoring, improvement, controller supervision).
 - **Strict Versioning:** Complete support for semantic versioning, auto-increment, promotion, patch bump, and archiving.
-- **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum).
+- **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum). Raw prompts can optionally be scored via the LLM itself.
 - **Pluggable Agents:** Clearly separated, easily extensible agent classes (Quality, Improvement, Controller, Extraction, Matchmaking, Reasoning, Ops).
 - **Event Logging & Audit Trail:** Every action, score, or improvement is logged as an AgentEvent in JSON with timestamp and version.
 - **Archiving:** Automatic archiving of prompts after every stage transition.
@@ -131,6 +131,7 @@ python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.y
 ## Advanced
 
 - **Scoring Matrix:** Use via Enum `ScoringMatrixType` (in `utils/scoring_matrix_types.py`), type-checked, customizable per agent.
+- **LLM-based scoring:** When `use_llm=True` the quality agent sends prompt and criterion text to OpenAI and interprets the reply as pass/fail (enabled for RAW prompts).
 - **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
 - **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
 
