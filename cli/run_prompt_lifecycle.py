@@ -11,6 +11,7 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - No more per-agent or per-step logs – just one JSONL log per workflow.
 # - Requires all agents to accept and use the workflow_id.
 # - Uses improvement_strategy mapping (Enum-based) per layer.
+# - Stops early when no version change or score improvement is minimal.
 """
 
 import sys
@@ -24,9 +25,14 @@ import argparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import clean_base_name, parse_version_from_yaml
+from utils.prompt_versioning import (
+    clean_base_name,
+    parse_version_from_yaml,
+    extract_version,
+)
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
+from utils.schemas import AgentEvent
 
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
@@ -56,6 +62,10 @@ def evaluate_and_improve_prompt(
     base_version = parse_version_from_yaml(path)
     iteration = 0
     current_path = path
+    prev_score = None  # Track previous quality score for early stopping
+    prev_version = extract_version(
+        current_path.name
+    )  # Track previous version for early stopping
 
     matrix_lookup = {
         "raw": "RAW",
@@ -74,8 +84,9 @@ def evaluate_and_improve_prompt(
 
     while iteration < 7:
         iteration += 1
+        current_version = extract_version(current_path.name)
         print(
-            f"🔍 Processing {current_path.name} (iteration {iteration} | version {base_version})"
+            f"🔍 Processing {current_path.name} (iteration {iteration} | version {current_version})"
         )
 
         matrix_name = clean_base_name(current_path.name)  # CLEAN BASE NAME
@@ -113,6 +124,31 @@ def evaluate_and_improve_prompt(
         if pq_event.payload["pass_threshold"]:
             print("✅ Prompt passed quality threshold.")
             break
+
+        # --- Early stop check: abort if version unchanged or score gain tiny
+        score = pq_event.payload.get("score", 0.0)
+        if prev_score is not None:
+            score_diff = score - prev_score
+            if current_version == prev_version or score_diff < 0.01:
+                print(
+                    "⛔️ Early stop: version unchanged or score improvement < 0.01"
+                )
+                stop_event = AgentEvent(
+                    event_type="early_stop",
+                    agent_name="LifecycleManager",
+                    agent_version="1.0.0",
+                    timestamp=cet_now(),
+                    step_id="evaluation_loop",
+                    prompt_version=current_version,
+                    status="stopped",
+                    payload={"reason": "no_improvement", "score_diff": score_diff},
+                    meta={"iteration": iteration},
+                )
+                logger.log_event(stop_event)
+                break
+
+        prev_score = score
+        prev_version = current_version
 
         # 3. Improvement Agent laufen lassen, falls Threshold nicht erreicht
         improvement_event = improvement_agent.run(
