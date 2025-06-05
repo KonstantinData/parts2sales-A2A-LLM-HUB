@@ -11,27 +11,27 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - No more per-agent or per-step logs – just one JSONL log per workflow.
 # - Requires all agents to accept and use the workflow_id.
 # - Uses improvement_strategy mapping (Enum-based) per layer.
+# - Stops early when no version change or score improvement is minimal.
 """
 
 import sys
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.time_utils import cet_now
 import argparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import clean_base_name
+from utils.prompt_versioning import clean_base_name, extract_version
 from utils.semantic_versioning_utils import parse_version_from_yaml, bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
+from utils.schemas import AgentEvent
 
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
-from agents.controller_agent import ControllerAgent
 
 from utils.improvement_strategies import ImprovementStrategy
 
@@ -50,13 +50,13 @@ improvement_strategy_lookup = {
 def evaluate_and_improve_prompt(
     path: Path, layer: str = "feature_setup", openai_client=None
 ):
-    # --- Generate unique workflow_id for this run
     workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
     logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
 
-    base_version = parse_version_from_yaml(path)
     iteration = 0
     current_path = path
+    prev_score = None
+    prev_version = extract_version(current_path.name)
 
     matrix_lookup = {
         "raw": "RAW",
@@ -75,11 +75,12 @@ def evaluate_and_improve_prompt(
 
     while iteration < 7:
         iteration += 1
+        current_version = extract_version(current_path.name)
         print(
-            f"🔍 Processing {current_path.name} (iteration {iteration} | version {base_version})"
+            f"🔍 Processing {current_path.name} (iteration {iteration} | version {current_version})"
         )
 
-        matrix_name = clean_base_name(current_path.name)  # CLEAN BASE NAME
+        matrix_name = clean_base_name(current_path.name)
         matrix_key = matrix_lookup.get(matrix_name)
 
         if not matrix_key:
@@ -94,7 +95,6 @@ def evaluate_and_improve_prompt(
                 f"Invalid scoring matrix type: '{matrix_key}'. Available types: {[e.name for e in ScoringMatrixType]}"
             )
 
-        # 1. Agents erzeugen
         quality_agent = PromptQualityAgent(
             scoring_matrix_type=matrix_type, openai_client=openai_client
         )
@@ -102,7 +102,6 @@ def evaluate_and_improve_prompt(
             improvement_strategy=improvement_strategy, openai_client=openai_client
         )
 
-        # 2. Quality Agent laufen lassen
         pq_event = quality_agent.run(
             current_path,
             base_name=matrix_name,
@@ -115,7 +114,28 @@ def evaluate_and_improve_prompt(
             print("✅ Prompt passed quality threshold.")
             break
 
-        # 3. Improvement Agent laufen lassen, falls Threshold nicht erreicht
+        score = pq_event.payload.get("score", 0.0)
+        if prev_score is not None:
+            score_diff = score - prev_score
+            if current_version == prev_version or score_diff < 0.01:
+                print("⛔️ Early stop: version unchanged or score improvement < 0.01")
+                stop_event = AgentEvent(
+                    event_type="early_stop",
+                    agent_name="LifecycleManager",
+                    agent_version="1.0.0",
+                    timestamp=cet_now(),
+                    step_id="evaluation_loop",
+                    prompt_version=current_version,
+                    status="stopped",
+                    payload={"reason": "no_improvement", "score_diff": score_diff},
+                    meta={"iteration": iteration},
+                )
+                logger.log_event(stop_event)
+                break
+
+        prev_score = score
+        prev_version = current_version
+
         improvement_event = improvement_agent.run(
             prompt_path=current_path,
             base_name=matrix_name,
@@ -125,23 +145,15 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(improvement_event)
 
-        # 4. Version bump tracking
-        old_version = base_version
-        # The improvement agent returns the bumped version in the event meta.
-        # Fall back to a computed bump if it is missing for any reason.
+        old_version = current_version
         new_version = improvement_event.meta.get("new_version") or bump(old_version, "patch")
 
-        # Update our loop variable so the next iteration shows the new version
-        base_version = new_version
         print(f"📈 Version bump: {old_version} -> {new_version}")
 
-        # 5. current_path auf verbesserten Prompt-Pfad umstellen
         if "updated_path" in improvement_event.meta:
             current_path = Path(improvement_event.meta["updated_path"])
         else:
-            print(
-                "⚠️ No updated_path found in improvement_event.meta. Stopping iteration."
-            )
+            print("⚠️ No updated_path found in improvement_event.meta. Stopping iteration.")
             break
 
         if iteration >= 7:

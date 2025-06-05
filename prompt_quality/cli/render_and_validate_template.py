@@ -70,9 +70,10 @@ import os
 import re
 import sys
 from datetime import datetime
-from utils.time_utils import cet_now
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(**file**), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from utils.time_utils import cet_now
 
 from prompt\_quality.validate\_prompt\_quality\_en import validate\_prompt\_en
 from prompt\_quality.validate\_prompt\_quality\_de import validate\_prompt\_de

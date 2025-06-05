@@ -2,12 +2,12 @@ import os
 import argparse
 import sys
 import json
-from datetime import datetime
-from utils.time_utils import cet_now
-from colorama import init, Fore, Style
 
 # Projektpfad für Imports sicherstellen
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from utils.time_utils import cet_now
+from colorama import init, Fore, Style
 
 from prompt_quality.validators.validate_prompt_quality_en import validate_prompt_en
 from prompt_quality.languages import lang_en
