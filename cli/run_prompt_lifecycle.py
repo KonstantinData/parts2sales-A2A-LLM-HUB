@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+
+from utils.time_utils import cet_now
 import argparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -48,7 +50,7 @@ def evaluate_and_improve_prompt(
     path: Path, layer: str = "feature_setup", openai_client=None
 ):
     # --- Generate unique workflow_id for this run
-    workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+    workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
     logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
 
     base_version = parse_version_from_yaml(path)

@@ -13,6 +13,7 @@ Notes   :
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from .time_utils import cet_now
 
 
 class PromptQualityResult(BaseModel):
@@ -63,7 +64,7 @@ class AgentEvent(BaseModel):
     event_type: str
     agent_name: str
     agent_version: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=cet_now)
     step_id: str
     prompt_version: Optional[str] = None
     meta: Dict[str, Any] = Field(default_factory=dict)

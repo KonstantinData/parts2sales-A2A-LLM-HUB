@@ -13,6 +13,7 @@ Notes   :
 import os
 import shutil
 from datetime import datetime
+from utils.time_utils import cet_now
 
 
 def archive_prompt_file(file_path: str, archive_dir: str = "archive") -> str:
@@ -31,7 +32,7 @@ def archive_prompt_file(file_path: str, archive_dir: str = "archive") -> str:
     if not os.path.isdir(archive_dir):
         os.makedirs(archive_dir)
     base_name = os.path.basename(file_path)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = cet_now().strftime("%Y%m%d_%H%M%S")
     archived_file = os.path.join(archive_dir, f"{base_name}.{timestamp}.bak")
     shutil.copy2(file_path, archived_file)
     return archived_file

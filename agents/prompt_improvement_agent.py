@@ -16,6 +16,8 @@ Author  : Konstantin Milonas with support from AI Copilot
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+
+from utils.time_utils import cet_now
 import re
 
 from utils.schemas import AgentEvent
@@ -110,7 +112,7 @@ class PromptImprovementAgent:
         Logs all events into the centralized workflow JSONL log.
         """
         if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
@@ -134,7 +136,7 @@ class PromptImprovementAgent:
                 event_type="prompt_improvement",
                 agent_name="PromptImprovementAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="improvement",
                 prompt_version=base_name,
                 status="success",
@@ -155,7 +157,7 @@ class PromptImprovementAgent:
                 event_type="error",
                 agent_name="PromptImprovementAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="improvement",
                 prompt_version=base_name,
                 status="error",
