@@ -16,6 +16,8 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
+from utils.time_utils import cet_now
+
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
@@ -74,7 +76,7 @@ class LLMPromptScorer:
         Logs the entire process as an AgentEvent in a centralized JSONL workflow log.
         """
         if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
@@ -110,7 +112,7 @@ class LLMPromptScorer:
                 event_type="llm_prompt_score",
                 agent_name="LLMPromptScorer",
                 agent_version="2.1.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="scoring",
                 prompt_version=base_name,
                 status="success",
@@ -130,7 +132,7 @@ class LLMPromptScorer:
                 event_type="error",
                 agent_name="LLMPromptScorer",
                 agent_version="2.1.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="scoring",
                 prompt_version=base_name,
                 status="error",

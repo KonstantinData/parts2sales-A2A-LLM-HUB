@@ -17,6 +17,8 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
+from utils.time_utils import cet_now
+
 from utils.openai_client import OpenAIClient
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
@@ -53,7 +55,7 @@ class PromptQualityAgent:
         Ensures structured feedback (list) for downstream improvement agent.
         """
         if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
@@ -83,7 +85,7 @@ class PromptQualityAgent:
                 event_type="error",
                 agent_name="PromptQualityAgent",
                 agent_version="1.4.3",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,
                 status="error",

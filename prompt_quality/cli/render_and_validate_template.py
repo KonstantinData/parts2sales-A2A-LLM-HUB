@@ -70,6 +70,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from utils.time_utils import cet_now
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(**file**), "..")))
 
@@ -138,7 +139,7 @@ print("\nPrompt Preview:\n----------------")
 print(full_prompt_with_input)
 
 print("\nQuality Checks:\n----------------")
-timestamp = datetime.now().strftime("%Y-%m-%dT%H_%M_%S")
+timestamp = cet_now().strftime("%Y-%m-%dT%H_%M_%S")
 log_path = os.path.join(LOG_DIR, f"prompt_check_{language}_{timestamp}.txt")
 
 with open(log_path, "w", encoding="utf-8") as log:
