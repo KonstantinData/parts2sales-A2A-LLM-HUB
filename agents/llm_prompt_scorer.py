@@ -21,23 +21,27 @@ from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
+from typing import Optional
 
 
 class LLMPromptScorer:
     def __init__(
         self,
         scoring_matrix: dict,
-        openai_client: OpenAIClient,
+        openai_client: Optional[OpenAIClient] = None,
         log_dir=Path("logs/workflows"),
+        use_llm: bool = False,
     ):
         """
         scoring_matrix: dict with per-criterion weights, descriptions, and feedbacks
         openai_client: injected LLM client (not required for base matrix scoring)
         log_dir: directory for workflow logs (default: logs/workflows)
+        use_llm: if True, criteria are validated via the injected LLM
         """
         self.scoring_matrix = scoring_matrix
         self.llm = openai_client
         self.log_dir = log_dir
+        self.use_llm = use_llm
 
     def _evaluate_criteria(self, prompt_content: str) -> dict:
         """
@@ -49,13 +53,33 @@ class LLMPromptScorer:
         """
         results = {}
         for key, rule in self.scoring_matrix.items():
-            snippet = rule.get("required_snippet")
-            if snippet:
-                # Case-insensitive substring match
-                results[key] = snippet.lower() in prompt_content.lower()
+            if self.use_llm:
+                if self.llm is None:
+                    results[key] = False
+                    continue
+                description = rule.get("description", "")
+                prompt = (
+                    "Does the following prompt meet this criterion?\n"
+                    f"Criterion: {description}\n"
+                    "Answer only with 'PASS' or 'FAIL'.\n\n"
+                    f"Prompt:\n{prompt_content}"
+                )
+                try:
+                    response = self.llm.chat_completion(
+                        prompt=prompt,
+                        temperature=0.0,
+                        max_tokens=5,
+                    )
+                    answer = response.choices[0].message.get("content", "").strip().lower()
+                    results[key] = answer.startswith("pass")
+                except Exception:
+                    results[key] = False
             else:
-                # No specific snippet required: always True (or extend with domain logic)
-                results[key] = True
+                snippet = rule.get("required_snippet")
+                if snippet:
+                    results[key] = snippet.lower() in prompt_content.lower()
+                else:
+                    results[key] = True
         return results
 
     def _weighted_score(self, results: dict) -> float:
@@ -111,7 +135,7 @@ class LLMPromptScorer:
             event = AgentEvent(
                 event_type="llm_prompt_score",
                 agent_name="LLMPromptScorer",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="scoring",
                 prompt_version=base_name,
@@ -131,7 +155,7 @@ class LLMPromptScorer:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="LLMPromptScorer",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="scoring",
                 prompt_version=base_name,

@@ -23,6 +23,7 @@ from utils.openai_client import OpenAIClient
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.scoring_matrix_loader import load_scoring_matrix
+from utils.scoring_matrix_types import ScoringMatrixType
 from agents.llm_prompt_scorer import LLMPromptScorer
 
 
@@ -43,7 +44,10 @@ class PromptQualityAgent:
         self.llm = openai_client
         self.log_dir = log_dir
         self.scorer = LLMPromptScorer(
-            self.scoring_matrix, self.llm, log_dir=self.log_dir
+            self.scoring_matrix,
+            self.llm,
+            log_dir=self.log_dir,
+            use_llm=self.scoring_matrix_type == ScoringMatrixType.RAW,
         )
 
     def run(
