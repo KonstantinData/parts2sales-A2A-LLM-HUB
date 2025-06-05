@@ -24,10 +24,8 @@ from utils.time_utils import cet_now
 import argparse
 
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import (
-    clean_base_name,
-    extract_version,
-)
+from utils.prompt_versioning import clean_base_name, extract_version
+from utils.semantic_versioning_utils import parse_version_from_yaml, bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.schemas import AgentEvent
@@ -52,16 +50,13 @@ improvement_strategy_lookup = {
 def evaluate_and_improve_prompt(
     path: Path, layer: str = "feature_setup", openai_client=None
 ):
-    # --- Generate unique workflow_id for this run
     workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
     logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
 
     iteration = 0
     current_path = path
-    prev_score = None  # Track previous quality score for early stopping
-    prev_version = extract_version(
-        current_path.name
-    )  # Track previous version for early stopping
+    prev_score = None
+    prev_version = extract_version(current_path.name)
 
     matrix_lookup = {
         "raw": "RAW",
@@ -85,7 +80,7 @@ def evaluate_and_improve_prompt(
             f"🔍 Processing {current_path.name} (iteration {iteration} | version {current_version})"
         )
 
-        matrix_name = clean_base_name(current_path.name)  # CLEAN BASE NAME
+        matrix_name = clean_base_name(current_path.name)
         matrix_key = matrix_lookup.get(matrix_name)
 
         if not matrix_key:
@@ -100,7 +95,6 @@ def evaluate_and_improve_prompt(
                 f"Invalid scoring matrix type: '{matrix_key}'. Available types: {[e.name for e in ScoringMatrixType]}"
             )
 
-        # 1. Agents erzeugen
         quality_agent = PromptQualityAgent(
             scoring_matrix_type=matrix_type, openai_client=openai_client
         )
@@ -108,7 +102,6 @@ def evaluate_and_improve_prompt(
             improvement_strategy=improvement_strategy, openai_client=openai_client
         )
 
-        # 2. Quality Agent laufen lassen
         pq_event = quality_agent.run(
             current_path,
             base_name=matrix_name,
@@ -121,7 +114,6 @@ def evaluate_and_improve_prompt(
             print("✅ Prompt passed quality threshold.")
             break
 
-        # --- Early stop check: abort if version unchanged or score gain tiny
         score = pq_event.payload.get("score", 0.0)
         if prev_score is not None:
             score_diff = score - prev_score
@@ -144,7 +136,6 @@ def evaluate_and_improve_prompt(
         prev_score = score
         prev_version = current_version
 
-        # 3. Improvement Agent laufen lassen, falls Threshold nicht erreicht
         improvement_event = improvement_agent.run(
             prompt_path=current_path,
             base_name=matrix_name,
@@ -154,13 +145,15 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(improvement_event)
 
-        # 4. current_path auf verbesserten Prompt-Pfad umstellen
+        old_version = current_version
+        new_version = improvement_event.meta.get("new_version") or bump(old_version, "patch")
+
+        print(f"📈 Version bump: {old_version} -> {new_version}")
+
         if "updated_path" in improvement_event.meta:
             current_path = Path(improvement_event.meta["updated_path"])
         else:
-            print(
-                "⚠️ No updated_path found in improvement_event.meta. Stopping iteration."
-            )
+            print("⚠️ No updated_path found in improvement_event.meta. Stopping iteration.")
             break
 
         if iteration >= 7:

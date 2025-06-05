@@ -23,20 +23,34 @@ import re
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import extract_stage, extract_version, bump_version
+from utils.prompt_versioning import extract_stage, extract_version
+from utils.semantic_versioning_utils import bump, update_version_in_yaml_string
 
 
-def next_patch_filename(prompt_path: Path) -> Path:
-    """
-    Generates next patch version filename for a prompt.
-    E.g. 'feature_setup_raw_v0.1.0.yaml' → 'feature_setup_raw_v0.1.1.yaml'
-    """
+def next_patch_filename(prompt_path: Path, prompt_content: str):
+    """Return filename for the next patch and write the updated YAML."""
+
+    # Derive stage and version from the original file name
     orig_name = prompt_path.name
     stage = extract_stage(orig_name)
-    version = extract_version(orig_name)
-    new_version = bump_version(version, mode="patch")
-    new_name = re.sub(rf"_{stage}_v{version}", f"_{stage}_v{new_version}", orig_name)
-    return prompt_path.parent / new_name
+    old_version = extract_version(orig_name)
+
+    # Increment the version string using our helper
+    new_version = bump(old_version, level="patch")
+
+    # Replace the old version in the file name with the new one
+    new_name = re.sub(rf"_{stage}_v{old_version}", f"_{stage}_v{new_version}", orig_name)
+
+    # Also update the ``version:`` field inside the YAML content
+    updated_content = update_version_in_yaml_string(prompt_content, new_version)
+    new_path = prompt_path.parent / new_name
+
+    # Persist the updated YAML prompt under the new file name
+    with open(new_path, "w", encoding="utf-8") as f:
+        f.write(updated_content)
+
+    # Return the new file path along with both versions for logging
+    return new_path, old_version, new_version, updated_content
 
 
 class PromptImprovementAgent:
@@ -121,9 +135,9 @@ class PromptImprovementAgent:
 
             improved_prompt = self.improve_prompt(prompt_content, feedback=feedback)
 
-            updated_path = next_patch_filename(prompt_path)
-            with open(updated_path, "w", encoding="utf-8") as f:
-                f.write(improved_prompt)
+            updated_path, old_version, new_version, improved_prompt = next_patch_filename(
+                prompt_path, improved_prompt
+            )
 
             payload = {
                 "original_prompt": prompt_content,
@@ -145,6 +159,8 @@ class PromptImprovementAgent:
                     "iteration": iteration,
                     "improvement_strategy": self.improvement_strategy,
                     "updated_path": str(updated_path),
+                    "old_version": old_version,
+                    "new_version": new_version,
                 },
             )
             logger.log_event(event)
