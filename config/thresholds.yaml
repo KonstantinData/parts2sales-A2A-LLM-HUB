@@ -4,3 +4,4 @@ usecase_quality: 0.90
 industry_quality: 0.90
 company_quality: 0.90
 max_retries: 3
+use_llm_scoring: true

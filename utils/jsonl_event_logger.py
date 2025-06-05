@@ -20,7 +20,11 @@ class JsonlEventLogger:
             )
 
         with open(self.log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event.model_dump(), default=default) + "\n")
+            if hasattr(event, "model_dump"):
+                event_dict = event.model_dump()
+            else:  # pydantic<2
+                event_dict = event.dict()
+            f.write(json.dumps(event_dict, default=default) + "\n")
 
 
 """
