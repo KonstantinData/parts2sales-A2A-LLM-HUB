@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
-from utils.time_utils import cet_now
+from utils.time_utils import cet_now, timestamp_for_filename
 
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
@@ -37,7 +37,7 @@ class ControllerAgent:
         All events are logged into the workflow JSONL file.
         """
         if workflow_id is None:
-            workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
         meta = meta or {}
 
