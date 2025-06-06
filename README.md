@@ -119,7 +119,7 @@ USE_LLM_SCORING=true      # Enable LLM-based checks for RAW prompts
 # Setup
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt  # installs python-dotenv
 
 # Create .env and insert your keys
 
