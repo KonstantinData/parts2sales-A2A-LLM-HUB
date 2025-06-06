@@ -32,20 +32,22 @@ class TestPromptQualityAgent(unittest.TestCase):
     def test_matrix_score(self):
         prompt = "Fill the fields: {name}, {desc}."
         event = self._run_prompt(prompt)
-        score = event.payload.get("score", 0)
+        score = event.payload.get("matrix_score", 0)
         self.assertTrue(0 <= score <= 1)
 
     def test_llm_score(self):
         prompt = "Clear and concise: {foo}, {bar}."
         event = self._run_prompt(prompt)
-        score = event.payload.get("score", 0)
+        score = event.payload.get("llm_score", 0)
         self.assertTrue(0 <= score <= 1)
 
     def test_hybrid_score(self):
         prompt = "Brief: {a}, {b}."
         event = self._run_prompt(prompt)
-        score = event.payload.get("score", 0)
-        self.assertTrue(0 <= score <= 1)
+        matrix_score = event.payload.get("matrix_score", 0)
+        llm_score = event.payload.get("llm_score", 0)
+        self.assertTrue(0 <= matrix_score <= 1)
+        self.assertTrue(0 <= llm_score <= 1)
 
 
 if __name__ == "__main__":

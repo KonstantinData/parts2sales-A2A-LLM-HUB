@@ -43,7 +43,17 @@ class PromptQualityAgent:
         self.scoring_matrix = load_scoring_matrix(scoring_matrix_type)
         self.llm = openai_client
         self.log_dir = log_dir
-        self.scorer = LLMPromptScorer(
+        # Instantiate scorers for deterministic matrix evaluation and
+        # optional LLM-based validation. The deterministic scorer does not
+        # require an OpenAI client.
+        self.matrix_scorer = LLMPromptScorer(
+            self.scoring_matrix,
+            self.llm,
+            log_dir=self.log_dir,
+            use_llm=False,
+        )
+
+        self.llm_scorer = LLMPromptScorer(
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
@@ -63,24 +73,62 @@ class PromptQualityAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # Delegate scoring to LLMPromptScorer
-            score_event = self.scorer.run(
+            # Run deterministic matrix scoring
+            matrix_event = self.matrix_scorer.run(
                 prompt_path, base_name, iteration, workflow_id
             )
 
-            # *** Begin patch: ensure feedback is always a list ***
-            feedback = score_event.payload.get("feedback", [])
-            if isinstance(feedback, str):
-                # Split by newlines if multiline string, else wrap in list
-                feedback = [line for line in feedback.split("\n") if line.strip()]
-            if not feedback:
-                # Force at least an empty list for feedback
-                feedback = []
-            score_event.payload["feedback"] = feedback
-            # *** End patch ***
+            matrix_feedback = matrix_event.payload.get("feedback", [])
+            if isinstance(matrix_feedback, str):
+                matrix_feedback = [
+                    line for line in matrix_feedback.split("\n") if line.strip()
+                ]
+            if not matrix_feedback:
+                matrix_feedback = []
 
-            logger.log_event(score_event)
-            return score_event
+            # Run LLM-based scoring
+            llm_event = self.llm_scorer.run(
+                prompt_path, base_name, iteration, workflow_id
+            )
+
+            llm_feedback = llm_event.payload.get("feedback", [])
+            if isinstance(llm_feedback, str):
+                llm_feedback = [
+                    line for line in llm_feedback.split("\n") if line.strip()
+                ]
+            if not llm_feedback:
+                llm_feedback = []
+
+            payload = {
+                "matrix_score": matrix_event.payload.get("score"),
+                "matrix_pass_threshold": matrix_event.payload.get("pass_threshold"),
+                "passed_matrix": matrix_event.payload.get("passed"),
+                "matrix_results": matrix_event.payload.get("criteria_results"),
+                "matrix_feedback": matrix_feedback,
+                "llm_score": llm_event.payload.get("score"),
+                "llm_pass_threshold": llm_event.payload.get("pass_threshold"),
+                "passed_llm": llm_event.payload.get("passed"),
+                "llm_results": llm_event.payload.get("criteria_results"),
+                "llm_feedback": llm_feedback,
+            }
+
+            event = AgentEvent(
+                event_type="quality_check",
+                agent_name="PromptQualityAgent",
+                agent_version="1.5.0",
+                timestamp=cet_now(),
+                step_id="quality_evaluation",
+                prompt_version=base_name,
+                status="success",
+                payload=payload,
+                meta={
+                    "iteration": iteration,
+                    "scoring_matrix_type": str(self.scoring_matrix_type),
+                },
+            )
+
+            logger.log_event(event)
+            return event
 
         except Exception as ex:
             import traceback
@@ -88,7 +136,7 @@ class PromptQualityAgent:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.4.3",
+                agent_version="1.5.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,
