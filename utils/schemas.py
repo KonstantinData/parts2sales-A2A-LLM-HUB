@@ -60,6 +60,18 @@ class ContactMatchResult(BaseModel):
     prompt_version: Optional[str] = None
 
 
+class RawPrompt(BaseModel):
+    """Schema for raw YAML prompts."""
+
+    id: str
+    version: str
+    role: str
+    objective: str
+    input_format: Optional[str] = None
+    output_format: Optional[str] = None
+    constraints: Optional[List[str]] = None
+
+
 class AgentEvent(BaseModel):
     event_type: str
     agent_name: str
