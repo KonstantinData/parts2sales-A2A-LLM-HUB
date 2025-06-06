@@ -20,7 +20,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from utils.time_utils import cet_now
+from utils.time_utils import cet_now, timestamp_for_filename
 import argparse
 
 from utils.openai_client import OpenAIClient
@@ -50,7 +50,7 @@ improvement_strategy_lookup = {
 def evaluate_and_improve_prompt(
     path: Path, layer: str = "feature_setup", openai_client=None
 ):
-    workflow_id = f"{cet_now().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+    workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
     logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
 
     iteration = 0

@@ -6,7 +6,7 @@ import json
 # Projektpfad für Imports sicherstellen
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from utils.time_utils import cet_now
+from utils.time_utils import cet_now, timestamp_iso
 from colorama import init, Fore, Style
 
 from prompt_quality.validators.validate_prompt_quality_en import validate_prompt_en
@@ -83,7 +83,7 @@ def json_output(prompt, results):
         "score": score,
         "violations": violations,
         "checks": results,
-        "timestamp": cet_now().isoformat(),
+        "timestamp": timestamp_iso(),
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
 

@@ -15,3 +15,13 @@ CET_ZONE = ZoneInfo("Europe/Berlin")
 def cet_now() -> datetime:
     """Return the current time in Central European Time (CET)."""
     return datetime.now(CET_ZONE)
+
+
+def timestamp_for_filename() -> str:
+    """Return CET timestamp suitable for filenames (no timezone)."""
+    return cet_now().strftime("%Y-%m-%dT%H-%M-%S")
+
+
+def timestamp_iso() -> str:
+    """Return CET timestamp in ISO format without timezone offset."""
+    return cet_now().strftime("%Y-%m-%dT%H:%M:%S")
