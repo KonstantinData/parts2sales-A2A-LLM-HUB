@@ -50,7 +50,7 @@ class PromptQualityAgent:
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
-            use_llm=False,
+            use_llm=True,
         )
 
         self.llm_scorer = LLMPromptScorer(
