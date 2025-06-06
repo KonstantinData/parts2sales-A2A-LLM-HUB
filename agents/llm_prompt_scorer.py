@@ -15,6 +15,7 @@ Author  : Konstantin Milonas with support from AI Copilot
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+import os
 
 from utils.time_utils import cet_now, timestamp_for_filename
 
@@ -113,7 +114,7 @@ class LLMPromptScorer:
 
             # Calculate weighted, normalized score
             score = self._weighted_score(criteria_results)
-            threshold = 0.9  # Set globally or via config/env
+            threshold = float(os.getenv("THRESHOLD", "0.9"))
 
             passed = score >= threshold
 
