@@ -110,7 +110,7 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(pq_event)
 
-        if pq_event.payload["pass_threshold"]:
+        if pq_event.payload.get("passed"):
             print("✅ Prompt passed quality threshold.")
             break
 
