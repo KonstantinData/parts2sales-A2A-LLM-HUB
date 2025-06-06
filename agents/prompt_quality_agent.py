@@ -61,18 +61,31 @@ class PromptQualityAgent:
         )
 
     def run(
-        self, prompt_path: Path, base_name: str, iteration: int, workflow_id: str = None
+        self,
+        prompt_path: Path,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        detailed_feedback: bool = False,
     ):
         """
         Runs the prompt quality evaluation by delegating to LLMPromptScorer.
         Logs events under the workflow JSONL log.
         Ensures structured feedback (list) for downstream improvement agent.
+        If ``detailed_feedback`` is True, additional placeholder-level
+        feedback is returned under ``payload['detailed_feedback']``.
         """
         if workflow_id is None:
             workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                prompt_content = f.read()
+
+            import re
+            placeholders = re.findall(r"{([^{}]+)}", prompt_content)
+
             # Run deterministic matrix scoring
             matrix_event = self.matrix_scorer.run(
                 prompt_path, base_name, iteration, workflow_id
@@ -99,6 +112,19 @@ class PromptQualityAgent:
             if not llm_feedback:
                 llm_feedback = []
 
+            detailed_feedback_list = []
+            if detailed_feedback:
+                combined_matrix = "\n".join(matrix_feedback)
+                combined_llm = "\n".join(llm_feedback)
+                for ph in placeholders:
+                    detailed_feedback_list.append(
+                        {
+                            "position": ph,
+                            "matrix_feedback": combined_matrix,
+                            "llm_feedback": combined_llm,
+                        }
+                    )
+
             payload = {
                 "matrix_score": matrix_event.payload.get("score"),
                 "matrix_pass_threshold": matrix_event.payload.get("pass_threshold"),
@@ -111,11 +137,13 @@ class PromptQualityAgent:
                 "llm_results": llm_event.payload.get("criteria_results"),
                 "llm_feedback": llm_feedback,
             }
+            if detailed_feedback:
+                payload["detailed_feedback"] = detailed_feedback_list
 
             event = AgentEvent(
                 event_type="quality_check",
                 agent_name="PromptQualityAgent",
-                agent_version="1.5.0",
+                agent_version="1.6.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,
@@ -136,7 +164,7 @@ class PromptQualityAgent:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.5.0",
+                agent_version="1.6.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,

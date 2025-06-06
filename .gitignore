@@ -60,6 +60,7 @@ logs/weighted_score/*
 logs/quality_log/*
 logs/feedback_log/*
 logs/change_log/*
+logs/workflows/*
 !logs/**/.gitkeep
 
 # Prompt-Versionen ab v2 aufwärts ignorieren (aber nicht v1 oder template)
