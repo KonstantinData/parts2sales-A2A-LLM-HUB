@@ -106,12 +106,15 @@ graph LR
 
 ```env
 OPENAI_API_KEY=sk-...
-THRESHOLD=0.90
+THRESHOLD=0.90        # Optional. Minimum score for LLMPromptScorer (defaults to 0.9)
 MAX_ITERATIONS=3
 HUBSPOT_API_KEY=your-key   # Optional, if CRM sync is enabled
 LOG_LEVEL=INFO
 USE_LLM_SCORING=true      # Enable LLM-based checks for RAW prompts
 ```
+
+`THRESHOLD` controls the minimum score required for a prompt to pass quality
+checks. When not set, the default of `0.9` is used.
 
 ## Getting Started
 
