@@ -11,14 +11,15 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - Maintains centralized workflow JSONL logging for traceability.
 # - Logs all agent actions and errors as structured AgentEvents.
 # - Designed for scalable, auditable prompt quality evaluation.
+# - Optionally triggers LLM-based detailed feedback generation per placeholder using scoring matrix context.
 """
 
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+import re
 
 from utils.time_utils import cet_now, timestamp_for_filename
-
 from utils.openai_client import OpenAIClient
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
@@ -43,22 +44,57 @@ class PromptQualityAgent:
         self.scoring_matrix = load_scoring_matrix(scoring_matrix_type)
         self.llm = openai_client
         self.log_dir = log_dir
-        # Instantiate scorers for deterministic matrix evaluation and
-        # optional LLM-based validation. The deterministic scorer does not
-        # require an OpenAI client.
         self.matrix_scorer = LLMPromptScorer(
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
-            use_llm=True,
+            use_llm=False,
         )
-
         self.llm_scorer = LLMPromptScorer(
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
             use_llm=True,
         )
+
+    def _generate_llm_detailed_feedback(self, placeholders, prompt_text):
+        """
+        For each placeholder in the prompt, ask the LLM to evaluate
+        its semantic quality and compliance with scoring matrix expectations.
+        Returns a list of {position, feedback} dicts.
+        """
+        results = []
+        for ph in placeholders:
+            criteria = self.scoring_matrix.get(ph, "Keine spezifische Regel vorhanden.")
+            prompt = f"""
+Du bist ein Prompt-Qualitätsbewerter. Analysiere die folgende Platzhalter-Position im gegebenen Prompt.
+
+Prompt:
+{prompt_text}
+
+Platzhalter: {{{ph}}}
+Matrix-Anforderung: {criteria}
+
+Beurteile, ob die Position semantisch sinnvoll und regelkonform ist. Gib eine Begründung und eine Verbesserungsempfehlung.
+Antworte im Format:
+- Bewertung:
+- Empfehlung:
+"""
+            try:
+                response = (
+                    self.llm.chat_completion(
+                        prompt=prompt,
+                        temperature=0.3,
+                        max_tokens=300,
+                    )
+                    .choices[0]
+                    .message.get("content", "")
+                    .strip()
+                )
+            except Exception as ex:
+                response = f"Fehler bei LLM-Auswertung: {ex}"
+            results.append({"position": ph, "feedback": response.strip()})
+        return results
 
     def run(
         self,
@@ -83,47 +119,25 @@ class PromptQualityAgent:
             with open(prompt_path, "r", encoding="utf-8") as f:
                 prompt_content = f.read()
 
-            import re
             placeholders = re.findall(r"{([^{}]+)}", prompt_content)
 
-            # Run deterministic matrix scoring
             matrix_event = self.matrix_scorer.run(
                 prompt_path, base_name, iteration, workflow_id
             )
-
             matrix_feedback = matrix_event.payload.get("feedback", [])
             if isinstance(matrix_feedback, str):
                 matrix_feedback = [
-                    line for line in matrix_feedback.split("\n") if line.strip()
+                    line.strip() for line in matrix_feedback.split("\n") if line.strip()
                 ]
-            if not matrix_feedback:
-                matrix_feedback = []
 
-            # Run LLM-based scoring
             llm_event = self.llm_scorer.run(
                 prompt_path, base_name, iteration, workflow_id
             )
-
             llm_feedback = llm_event.payload.get("feedback", [])
             if isinstance(llm_feedback, str):
                 llm_feedback = [
-                    line for line in llm_feedback.split("\n") if line.strip()
+                    line.strip() for line in llm_feedback.split("\n") if line.strip()
                 ]
-            if not llm_feedback:
-                llm_feedback = []
-
-            detailed_feedback_list = []
-            if detailed_feedback:
-                combined_matrix = "\n".join(matrix_feedback)
-                combined_llm = "\n".join(llm_feedback)
-                for ph in placeholders:
-                    detailed_feedback_list.append(
-                        {
-                            "position": ph,
-                            "matrix_feedback": combined_matrix,
-                            "llm_feedback": combined_llm,
-                        }
-                    )
 
             payload = {
                 "matrix_score": matrix_event.payload.get("score"),
@@ -137,13 +151,17 @@ class PromptQualityAgent:
                 "llm_results": llm_event.payload.get("criteria_results"),
                 "llm_feedback": llm_feedback,
             }
+
             if detailed_feedback:
-                payload["detailed_feedback"] = detailed_feedback_list
+                detailed_feedback_llm = self._generate_llm_detailed_feedback(
+                    placeholders, prompt_content
+                )
+                payload["detailed_feedback"] = detailed_feedback_llm
 
             event = AgentEvent(
                 event_type="quality_check",
                 agent_name="PromptQualityAgent",
-                agent_version="1.6.0",
+                agent_version="1.7.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,
@@ -164,7 +182,7 @@ class PromptQualityAgent:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.6.0",
+                agent_version="1.7.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,

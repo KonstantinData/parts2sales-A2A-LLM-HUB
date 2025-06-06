@@ -8,6 +8,7 @@ Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
 # - Accepts dynamic, context-sensitive feedback for prompt improvement.
+# - Supports both plain feedback and structured detailed_feedback from PromptQualityAgent.
 # - Uses LLM to rewrite prompts guided by feedback.
 # - Ensures all events are traceably logged per workflow/session.
 # - Supports multiple improvement strategies for extensibility.
@@ -16,10 +17,9 @@ Author  : Konstantin Milonas with support from AI Copilot
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
-
-from utils.time_utils import cet_now, timestamp_for_filename
 import re
 
+from utils.time_utils import cet_now, timestamp_for_filename
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
@@ -29,27 +29,17 @@ from utils.semantic_versioning_utils import bump, update_version_in_yaml_string
 
 def next_patch_filename(prompt_path: Path, prompt_content: str):
     """Return filename for the next patch and write the updated YAML."""
-
-    # Derive stage and version from the original file name
     orig_name = prompt_path.name
     stage = extract_stage(orig_name)
     old_version = extract_version(orig_name)
-
-    # Increment the version string using our helper
     new_version = bump(old_version, level="patch")
-
-    # Replace the old version in the file name with the new one
-    new_name = re.sub(rf"_{stage}_v{old_version}", f"_{stage}_v{new_version}", orig_name)
-
-    # Also update the ``version:`` field inside the YAML content
+    new_name = re.sub(
+        rf"_{stage}_v{old_version}", f"_{stage}_v{new_version}", orig_name
+    )
     updated_content = update_version_in_yaml_string(prompt_content, new_version)
     new_path = prompt_path.parent / new_name
-
-    # Persist the updated YAML prompt under the new file name
     with open(new_path, "w", encoding="utf-8") as f:
         f.write(updated_content)
-
-    # Return the new file path along with both versions for logging
     return new_path, old_version, new_version, updated_content
 
 
@@ -72,11 +62,11 @@ class PromptImprovementAgent:
     def improve_prompt(self, prompt_content: str, feedback=None) -> str:
         """
         Use LLM to improve the prompt based on quality feedback.
-        If feedback is empty or unspecific, propose at least one micro-improvement.
+        Supports structured feedback (e.g., from detailed LLM analysis).
 
         Args:
             prompt_content: Original prompt text.
-            feedback: List of feedback strings from quality evaluation.
+            feedback: List of feedback strings or dicts (structured) from quality evaluation.
 
         Returns:
             Improved prompt text.
@@ -85,21 +75,33 @@ class PromptImprovementAgent:
             feedback = []
         if isinstance(feedback, str):
             feedback = [feedback]
-        feedback_section = "\n".join(f"- {fb}" for fb in feedback if fb.strip())
+
+        # Normalize and format structured feedback
+        structured_sections = []
+        for fb in feedback:
+            if isinstance(fb, dict) and "position" in fb and "feedback" in fb:
+                section = f"### Position: {fb['position']}\n{fb['feedback']}"
+                structured_sections.append(section)
+            elif isinstance(fb, str):
+                structured_sections.append(f"- {fb}")
+
+        feedback_section = "\n\n".join(structured_sections).strip()
         if not feedback_section:
-            feedback_section = "No explicit weaknesses detected. Please suggest at least one minor improvement in clarity, explicitness, conciseness, or formatting."
+            feedback_section = (
+                "No explicit weaknesses detected. Please suggest at least one minor improvement in clarity, "
+                "explicitness, conciseness, or formatting."
+            )
 
         full_prompt = (
             "You are an expert prompt engineer.\n"
-            "Review the following prompt and the given feedback from a previous quality assessment.\n"
-            "For each identified weakness, rewrite the prompt to directly address the point, making your changes explicit and relevant.\n"
-            "If the feedback is empty or unspecific, propose at least one minor improvement to clarity, explicitness, conciseness, or formatting.\n"
-            "Clearly reference required output formats, instructions, and examples if mentioned in the feedback.\n"
+            "Review the following prompt and the structured feedback from a previous quality assessment.\n"
+            "For each identified issue, rewrite the prompt to directly address it.\n"
+            "Make your improvements clear and relevant. If no clear issue is found, improve clarity or format.\n\n"
             "Original prompt:\n"
             f"{prompt_content}\n\n"
-            "Feedback (quality agent findings):\n"
+            "Feedback:\n"
             f"{feedback_section}\n\n"
-            "Please rewrite the prompt so that every criticism from the feedback is resolved, or, if no criticisms are present, suggest one incremental improvement."
+            "Rewritten prompt:"
         )
 
         response = self.llm.chat_completion(
@@ -109,9 +111,7 @@ class PromptImprovementAgent:
         )
 
         improved_prompt = response.choices[0].message.get("content", "").strip()
-        if not improved_prompt:
-            improved_prompt = prompt_content
-        return improved_prompt
+        return improved_prompt or prompt_content
 
     def run(
         self,
@@ -135,8 +135,8 @@ class PromptImprovementAgent:
 
             improved_prompt = self.improve_prompt(prompt_content, feedback=feedback)
 
-            updated_path, old_version, new_version, improved_prompt = next_patch_filename(
-                prompt_path, improved_prompt
+            updated_path, old_version, new_version, improved_prompt = (
+                next_patch_filename(prompt_path, improved_prompt)
             )
 
             payload = {

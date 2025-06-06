@@ -2,7 +2,7 @@
 run_prompt_lifecycle.py
 
 Purpose : Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
-Version : 1.4.1
+Version : 1.4.2
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
@@ -12,6 +12,7 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - Requires all agents to accept and use the workflow_id.
 # - Uses improvement_strategy mapping (Enum-based) per layer.
 # - Stops early when no version change or score improvement is minimal.
+# - Automatically activates detailed_feedback on score failure.
 """
 
 import sys
@@ -107,6 +108,7 @@ def evaluate_and_improve_prompt(
             base_name=matrix_name,
             iteration=iteration,
             workflow_id=workflow_id,
+            detailed_feedback=True,  # Activieren, um detailliertes Feedback zu erhalten
         )
         logger.log_event(pq_event)
 
@@ -114,7 +116,9 @@ def evaluate_and_improve_prompt(
             print("✅ Prompt passed quality threshold.")
             break
 
-        score = pq_event.payload.get("llm_score", pq_event.payload.get("matrix_score", 0.0))
+        score = pq_event.payload.get(
+            "llm_score", pq_event.payload.get("matrix_score", 0.0)
+        )
         if prev_score is not None:
             score_diff = score - prev_score
             if current_version == prev_version or score_diff < 0.01:
@@ -137,7 +141,8 @@ def evaluate_and_improve_prompt(
         prev_version = current_version
 
         improvement_feedback = (
-            pq_event.payload.get("llm_feedback")
+            pq_event.payload.get("detailed_feedback")
+            or pq_event.payload.get("llm_feedback")
             or pq_event.payload.get("matrix_feedback")
             or []
         )
@@ -152,14 +157,18 @@ def evaluate_and_improve_prompt(
         logger.log_event(improvement_event)
 
         old_version = current_version
-        new_version = improvement_event.meta.get("new_version") or bump(old_version, "patch")
+        new_version = improvement_event.meta.get("new_version") or bump(
+            old_version, "patch"
+        )
 
         print(f"📈 Version bump: {old_version} -> {new_version}")
 
         if "updated_path" in improvement_event.meta:
             current_path = Path(improvement_event.meta["updated_path"])
         else:
-            print("⚠️ No updated_path found in improvement_event.meta. Stopping iteration.")
+            print(
+                "⚠️ No updated_path found in improvement_event.meta. Stopping iteration."
+            )
             break
 
         if iteration >= 7:

@@ -24,7 +24,10 @@ class JsonlEventLogger:
                 event_dict = event.model_dump()
             else:  # pydantic<2
                 event_dict = event.dict()
-            f.write(json.dumps(event_dict, default=default) + "\n")
+            f.write(
+                json.dumps(event_dict, default=default, ensure_ascii=False, indent=2)
+                + "\n"
+            )
 
 
 """
