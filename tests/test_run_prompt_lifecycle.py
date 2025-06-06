@@ -17,7 +17,14 @@ class TestLifecycleDecision(unittest.TestCase):
         temp_dir, path = self._make_temp_prompt()
         try:
             pq_event = MagicMock()
-            pq_event.payload = {"passed": False, "pass_threshold": 0.9, "score": 0.5, "feedback": []}
+            pq_event.payload = {
+                "passed_llm": False,
+                "passed_matrix": False,
+                "llm_score": 0.5,
+                "matrix_score": 0.8,
+                "llm_feedback": [],
+                "matrix_feedback": [],
+            }
             with patch("cli.run_prompt_lifecycle.PromptQualityAgent") as MockPQ, \
                 patch("cli.run_prompt_lifecycle.PromptImprovementAgent") as MockPI, \
                 patch("cli.run_prompt_lifecycle.JsonlEventLogger") as MockLogger:
@@ -35,7 +42,14 @@ class TestLifecycleDecision(unittest.TestCase):
         temp_dir, path = self._make_temp_prompt()
         try:
             pq_event = MagicMock()
-            pq_event.payload = {"passed": True, "pass_threshold": 0.9, "score": 0.95, "feedback": []}
+            pq_event.payload = {
+                "passed_llm": True,
+                "passed_matrix": True,
+                "llm_score": 0.95,
+                "matrix_score": 0.95,
+                "llm_feedback": [],
+                "matrix_feedback": [],
+            }
             with patch("cli.run_prompt_lifecycle.PromptQualityAgent") as MockPQ, \
                 patch("cli.run_prompt_lifecycle.PromptImprovementAgent") as MockPI, \
                 patch("cli.run_prompt_lifecycle.JsonlEventLogger") as MockLogger:
