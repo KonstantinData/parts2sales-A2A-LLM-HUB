@@ -24,6 +24,7 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.time_utils import cet_now, timestamp_for_filename
+import yaml
 import argparse
 from utils.openai_client import OpenAIClient
 from utils.prompt_versioning import clean_base_name, extract_version
@@ -36,7 +37,21 @@ from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
 from utils.improvement_strategies import ImprovementStrategy
 
-PASS_THRESHOLD = 0.85
+DEFAULT_PASS_THRESHOLD = 0.85
+
+
+def load_pass_threshold() -> float:
+    """Load pass threshold from config/thresholds.yaml."""
+    config_path = Path("config/thresholds.yaml")
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return float(data.get("prompt_quality", DEFAULT_PASS_THRESHOLD))
+    except Exception:
+        return DEFAULT_PASS_THRESHOLD
+
+
+PASS_THRESHOLD = load_pass_threshold()
 TARGET_VERSION = "v0.2.0"
 
 improvement_strategy_lookup = {
