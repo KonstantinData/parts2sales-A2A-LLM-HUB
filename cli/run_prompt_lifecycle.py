@@ -2,7 +2,7 @@
 run_prompt_lifecycle.py
 
 Purpose : Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
-Version : 1.4.2
+Version : 1.4.3
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
@@ -13,6 +13,7 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - Uses improvement_strategy mapping (Enum-based) per layer.
 # - Stops early when no version change or score improvement is minimal.
 # - Automatically activates detailed_feedback on score failure.
+# - Matrix selection now based on stable layer extraction from filename.
 """
 
 import sys
@@ -47,6 +48,25 @@ improvement_strategy_lookup = {
     "contact_assign": ImprovementStrategy.LLM,
 }
 
+# Mapping: layer name -> matrix enum key
+matrix_lookup = {
+    "raw": "RAW",
+    "template": "TEMPLATE",
+    "feature_setup": "FEATURE",
+    "usecase_detect": "USECASE",
+    "industry_class": "INDUSTRY",
+    "company_assign": "COMPANY",
+    "contact_assign": "CONTACT",
+}
+
+
+def extract_layer_from_filename(filename: str) -> str:
+    parts = filename.split("_")
+    for part in parts:
+        if part.lower() in matrix_lookup:
+            return part.lower()
+    raise ValueError(f"Could not determine layer from filename: {filename}")
+
 
 def evaluate_and_improve_prompt(
     path: Path, layer: str = "feature_setup", openai_client=None
@@ -59,20 +79,23 @@ def evaluate_and_improve_prompt(
     prev_score = None
     prev_version = extract_version(current_path.name)
 
-    matrix_lookup = {
-        "raw": "RAW",
-        "template": "TEMPLATE",
-        "feature_setup": "FEATURE",
-        "usecase_detect": "USECASE",
-        "industry_class": "INDUSTRY",
-        "company_assign": "COMPANY",
-        "contact_assign": "CONTACT",
-    }
-
-    layer_cleaned = layer.lower().lstrip("0123456789_")
+    layer_from_file = extract_layer_from_filename(current_path.name)
     improvement_strategy = improvement_strategy_lookup.get(
-        layer_cleaned, ImprovementStrategy.LLM
+        layer_from_file, ImprovementStrategy.LLM
     )
+    matrix_key = matrix_lookup.get(layer_from_file)
+
+    if not matrix_key:
+        raise ValueError(
+            f"Unknown or unmapped matrix layer '{layer_from_file}'. Please update 'matrix_lookup' mapping."
+        )
+
+    try:
+        matrix_type = ScoringMatrixType[matrix_key]
+    except KeyError:
+        raise ValueError(
+            f"Invalid scoring matrix type: '{matrix_key}'. Available types: {[e.name for e in ScoringMatrixType]}"
+        )
 
     while iteration < 7:
         iteration += 1
@@ -80,21 +103,6 @@ def evaluate_and_improve_prompt(
         print(
             f"🔍 Processing {current_path.name} (iteration {iteration} | version {current_version})"
         )
-
-        matrix_name = clean_base_name(current_path.name)
-        matrix_key = matrix_lookup.get(matrix_name)
-
-        if not matrix_key:
-            raise ValueError(
-                f"Unknown or unmapped matrix name '{matrix_name}'. Please update 'matrix_lookup' mapping."
-            )
-
-        try:
-            matrix_type = ScoringMatrixType[matrix_key]
-        except KeyError:
-            raise ValueError(
-                f"Invalid scoring matrix type: '{matrix_key}'. Available types: {[e.name for e in ScoringMatrixType]}"
-            )
 
         quality_agent = PromptQualityAgent(
             scoring_matrix_type=matrix_type, openai_client=openai_client
@@ -105,10 +113,10 @@ def evaluate_and_improve_prompt(
 
         pq_event = quality_agent.run(
             current_path,
-            base_name=matrix_name,
+            base_name=layer_from_file,
             iteration=iteration,
             workflow_id=workflow_id,
-            detailed_feedback=True,  # Activieren, um detailliertes Feedback zu erhalten
+            detailed_feedback=True,
         )
         logger.log_event(pq_event)
 
@@ -149,7 +157,7 @@ def evaluate_and_improve_prompt(
 
         improvement_event = improvement_agent.run(
             prompt_path=current_path,
-            base_name=matrix_name,
+            base_name=layer_from_file,
             iteration=iteration,
             workflow_id=workflow_id,
             feedback=improvement_feedback,
