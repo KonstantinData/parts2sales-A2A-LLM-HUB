@@ -15,10 +15,10 @@
     <p><strong>Zeitstempel:</strong> {{ entry.timestamp }}</p>
     <p><strong>Status:</strong> {{ entry.status }}</p>
 
-    {% if entry.payload.criteria_results %}
+    {% if entry.payload.criteria_scores %}
       <h3>Bewertungskriterien</h3>
       <ul>
-      {% for key, value in entry.payload.criteria_results.items() %}
+      {% for key, value in entry.payload.criteria_scores.items() %}
         <li>{{ key }}: {{ value }}</li>
       {% endfor %}
       </ul>

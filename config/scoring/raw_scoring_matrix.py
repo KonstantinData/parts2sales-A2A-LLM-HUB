@@ -20,26 +20,31 @@ SCORING_MATRIX = {
         "weight": 1.2,
         "description": "Does the prompt clearly express the user's goal and expected output?",
         "llm_score": "On a scale between 0 and 1, how would you rate the clarity of the prompt's goal and output?",
+        "feedback": "Clarify the user's goal and desired output so the intent is unmistakable.",
     },
     "format_consistency": {
         "weight": 1.1,
         "description": "Is the prompt formatted consistently and validly (e.g., YAML, JSON)?",
         "llm_score": "On a scale between 0 and 1, how consistent and valid is the format of the prompt?",
+        "feedback": "Ensure consistent and valid formatting such as correct YAML/JSON structure.",
     },
     "initial_structure": {
         "weight": 1.0,
         "description": "Does the prompt include all required structural elements (e.g., metadata, instruction, output schema)?",
         "llm_score": "On a scale between 0 and 1, how complete and well-structured is the initial prompt layout?",
+        "feedback": "Add any missing structural elements like metadata or an explicit output schema.",
     },
     "evalability": {
         "weight": 1.1,
         "description": "Can the expected output be clearly evaluated based on the given instruction?",
         "llm_score": "On a scale between 0 and 1, how well does the prompt support objective evaluation of the output?",
+        "feedback": "Guide the LLM toward outputs that are easy to judge for correctness.",
     },
     "ambiguity_avoidance": {
         "weight": 1.0,
         "description": "Are there any vague, conflicting or ambiguous instructions present?",
         "llm_score": "On a scale between 0 and 1, how free is the prompt from ambiguity or contradictions?",
+        "feedback": "Remove any ambiguous or conflicting wording so the instructions are precise.",
     },
 }
 
