@@ -120,13 +120,12 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(pq_event)
 
-        if pq_event.payload.get("passed_llm") or pq_event.payload.get("passed_matrix"):
+        results = pq_event.payload.get("criteria_results", {})
+        if results and all(results.values()):
             print("✅ Prompt passed quality threshold.")
             break
 
-        score = pq_event.payload.get(
-            "llm_score", pq_event.payload.get("matrix_score", 0.0)
-        )
+        score = sum(results.values()) / len(results) if results else 0.0
         if prev_score is not None:
             score_diff = score - prev_score
             if current_version == prev_version or score_diff < 0.01:
@@ -148,12 +147,7 @@ def evaluate_and_improve_prompt(
         prev_score = score
         prev_version = current_version
 
-        improvement_feedback = (
-            pq_event.payload.get("detailed_feedback")
-            or pq_event.payload.get("llm_feedback")
-            or pq_event.payload.get("matrix_feedback")
-            or []
-        )
+        improvement_feedback = pq_event.payload.get("detailed_feedback") or []
 
         improvement_event = improvement_agent.run(
             prompt_path=current_path,

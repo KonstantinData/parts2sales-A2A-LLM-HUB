@@ -44,17 +44,10 @@ class PromptQualityAgent:
         self.scoring_matrix = load_scoring_matrix(scoring_matrix_type)
         self.llm = openai_client
         self.log_dir = log_dir
-        self.matrix_scorer = LLMPromptScorer(
+        self.scorer = LLMPromptScorer(
             self.scoring_matrix,
             self.llm,
             log_dir=self.log_dir,
-            use_llm=False,
-        )
-        self.llm_scorer = LLMPromptScorer(
-            self.scoring_matrix,
-            self.llm,
-            log_dir=self.log_dir,
-            use_llm=True,
         )
 
     def _generate_llm_detailed_feedback(self, placeholders, prompt_text):
@@ -121,35 +114,14 @@ Antworte im Format:
 
             placeholders = re.findall(r"{([^{}]+)}", prompt_content)
 
-            matrix_event = self.matrix_scorer.run(
+            scorer_event = self.scorer.run(
                 prompt_path, base_name, iteration, workflow_id
             )
-            matrix_feedback = matrix_event.payload.get("feedback", [])
-            if isinstance(matrix_feedback, str):
-                matrix_feedback = [
-                    line.strip() for line in matrix_feedback.split("\n") if line.strip()
-                ]
-
-            llm_event = self.llm_scorer.run(
-                prompt_path, base_name, iteration, workflow_id
-            )
-            llm_feedback = llm_event.payload.get("feedback", [])
-            if isinstance(llm_feedback, str):
-                llm_feedback = [
-                    line.strip() for line in llm_feedback.split("\n") if line.strip()
-                ]
+            if scorer_event is None:
+                return None
 
             payload = {
-                "matrix_score": matrix_event.payload.get("score"),
-                "matrix_pass_threshold": matrix_event.payload.get("pass_threshold"),
-                "passed_matrix": matrix_event.payload.get("passed"),
-                "matrix_results": matrix_event.payload.get("criteria_results"),
-                "matrix_feedback": matrix_feedback,
-                "llm_score": llm_event.payload.get("score"),
-                "llm_pass_threshold": llm_event.payload.get("pass_threshold"),
-                "passed_llm": llm_event.payload.get("passed"),
-                "llm_results": llm_event.payload.get("criteria_results"),
-                "llm_feedback": llm_feedback,
+                "criteria_results": scorer_event.payload.get("criteria_results"),
             }
 
             if detailed_feedback:
