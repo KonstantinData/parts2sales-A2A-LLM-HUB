@@ -56,7 +56,6 @@ data/outputs/
 *.pdf
 
 # Agentenlogs (erlaube .gitkeep als Platzhalter)
-logs/weighted_score/*
 logs/quality_log/*
 logs/feedback_log/*
 logs/change_log/*

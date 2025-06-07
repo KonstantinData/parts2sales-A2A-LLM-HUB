@@ -7,7 +7,7 @@ Evaluation criteria for prompts used in feature extraction from product data.
 
 Usage:
 - Used by PromptQualityAgent when scoring feature extraction prompts.
-- Each criterion includes a weight and a feedback text for dynamic improvement hints.
+ - Each criterion includes a feedback text for dynamic improvement hints.
 """
 
 SCORING_MATRIX = {

@@ -35,7 +35,7 @@ class LLMPromptScorer:
         log_dir=Path("logs/workflows"),
     ):
         """
-        scoring_matrix: dict with per-criterion weights, descriptions, and feedbacks
+        scoring_matrix: dict with per-criterion descriptions and feedbacks
         openai_client: injected LLM client
         log_dir: directory for workflow logs (default: logs/workflows)
         """

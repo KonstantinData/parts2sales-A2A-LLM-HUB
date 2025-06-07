@@ -48,7 +48,7 @@ python run_template_batch.py --all
 │   ├── quality_log/                    # JSON: Dimension -> Issue
 │   ├── feedback_log/                   # Verbesserungsfeedback
 │   ├── change_log/                     # Prompt-Diffs mit Rationale
-│   └── weighted_score/                 # Score-only Files
+│   └── score_log/                      # Score-only Files
 ├── agents/
 │   ├── prompt_quality_agent.py
 │   ├── prompt_improvement_agent.py
@@ -79,7 +79,6 @@ OPENAI_API_KEY=sk-...
 ## 📌 Hinweis
 
 - Du kannst den Controller-Agent so konfigurieren, dass er nach bestimmten Versionen abbricht oder neue Varianten erzeugt.
-- Prompt-Qualität wird über gewichtete Scores berechnet und versioniert abgelegt.
 
 ## 📬 Kontakt
 
