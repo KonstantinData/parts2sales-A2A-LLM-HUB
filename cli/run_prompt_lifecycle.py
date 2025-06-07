@@ -25,20 +25,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.time_utils import cet_now, timestamp_for_filename
 import argparse
-
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import extract_version
+from utils.prompt_versioning import clean_base_name, extract_version
 from utils.semantic_versioning_utils import bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.schemas import AgentEvent
-
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
-
 from utils.improvement_strategies import ImprovementStrategy
 
-# Mapping: layer name -> improvement strategy
+# Config
+PASS_THRESHOLD = 0.85
+TARGET_VERSION = "v0.2.0"
+
+# Strategy mapping
 improvement_strategy_lookup = {
     "raw": ImprovementStrategy.LLM,
     "template": ImprovementStrategy.LLM,
@@ -49,7 +50,7 @@ improvement_strategy_lookup = {
     "contact_assign": ImprovementStrategy.LLM,
 }
 
-# Mapping: layer name -> matrix enum key
+# Matrix mapping
 matrix_lookup = {
     "raw": "RAW",
     "template": "TEMPLATE",
@@ -62,11 +63,24 @@ matrix_lookup = {
 
 
 def extract_layer_from_filename(filename: str) -> str:
-    parts = filename.split("_")
-    for part in parts:
-        if part.lower() in matrix_lookup:
-            return part.lower()
-    raise ValueError(f"Could not determine layer from filename: {filename}")
+    """
+    Extract the layer from the filename using known matrix layer keys.
+    """
+    known_layers = {
+        "raw",
+        "template",
+        "feature_setup",
+        "usecase_detect",
+        "industry_class",
+        "company_assign",
+        "contact_assign",
+    }
+
+    for part in filename.split("_"):
+        if part in known_layers:
+            return part
+
+    raise ValueError(f"Unable to determine matrix layer from filename: {filename}")
 
 
 def evaluate_and_improve_prompt(
@@ -87,16 +101,9 @@ def evaluate_and_improve_prompt(
     matrix_key = matrix_lookup.get(layer_from_file)
 
     if not matrix_key:
-        raise ValueError(
-            f"Unknown or unmapped matrix layer '{layer_from_file}'. Please update 'matrix_lookup' mapping."
-        )
+        raise ValueError(f"Unknown or unmapped matrix layer '{layer_from_file}'.")
 
-    try:
-        matrix_type = ScoringMatrixType[matrix_key]
-    except KeyError:
-        raise ValueError(
-            f"Invalid scoring matrix type: '{matrix_key}'. Available types: {[e.name for e in ScoringMatrixType]}"
-        )
+    matrix_type = ScoringMatrixType[matrix_key]
 
     while iteration < 7:
         iteration += 1
@@ -121,12 +128,24 @@ def evaluate_and_improve_prompt(
         )
         logger.log_event(pq_event)
 
-        results = pq_event.payload.get("criteria_results", {})
-        if results and all(results.values()):
+        weighted_score = pq_event.payload.get("weighted_score", 0.0)
+
+        if pq_event.payload.get("passed_llm") or weighted_score >= PASS_THRESHOLD:
             print("✅ Prompt passed quality threshold.")
+
+            # Final Save to Template Layer
+            target_name = current_path.name.replace("_raw_", "_template_").rsplit(
+                "_v", 1
+            )[0]
+            target_path = (
+                Path("prompts/01-template") / f"{target_name}_{TARGET_VERSION}.yaml"
+            )
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(current_path.read_text(), encoding="utf-8")
+            print(f"📦 Prompt exported to: {target_path}")
             break
 
-        score = sum(results.values()) / len(results) if results else 0.0
+        score = weighted_score
         if prev_score is not None:
             score_diff = score - prev_score
             if current_version == prev_version or score_diff < 0.01:
@@ -148,7 +167,12 @@ def evaluate_and_improve_prompt(
         prev_score = score
         prev_version = current_version
 
-        improvement_feedback = pq_event.payload.get("detailed_feedback") or []
+        improvement_feedback = (
+            pq_event.payload.get("detailed_feedback")
+            or pq_event.payload.get("llm_feedback")
+            or pq_event.payload.get("matrix_feedback")
+            or []
+        )
 
         improvement_event = improvement_agent.run(
             prompt_path=current_path,
@@ -163,7 +187,6 @@ def evaluate_and_improve_prompt(
         new_version = improvement_event.meta.get("new_version") or bump(
             old_version, "patch"
         )
-
         print(f"📈 Version bump: {old_version} -> {new_version}")
 
         if "updated_path" in improvement_event.meta:
