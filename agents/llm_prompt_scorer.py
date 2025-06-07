@@ -15,6 +15,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from utils.time_utils import cet_now, timestamp_for_filename
+from openai import OpenAIError
 
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
@@ -65,28 +66,13 @@ class LLMPromptScorer:
                 "Answer only with 'PASS' or 'FAIL'.\n\n"
                 f"Prompt:\n{prompt_content}"
             )
-            try:
-                response = self.llm.chat_completion(
-                    prompt=prompt,
-                    temperature=0.0,
-                    max_tokens=5,
-                )
-                answer = response.choices[0].message.get("content", "").strip().lower()
-                results[key] = answer.startswith("pass")
-            except Exception:
-                error_event = AgentEvent(
-                    event_type="error",
-                    agent_name="LLMPromptScorer",
-                    agent_version="2.2.0",
-                    timestamp=cet_now(),
-                    step_id="scoring",
-                    prompt_version=base_name,
-                    status="error",
-                    payload={"reason": "LLM API unavailable"},
-                    meta={"iteration": iteration, "criterion": key},
-                )
-                logger.log_event(error_event)
-                raise LLMUnavailableError from None
+            response = self.llm.chat_completion(
+                prompt=prompt,
+                temperature=0.0,
+                max_tokens=5,
+            )
+            answer = response.choices[0].message.get("content", "").strip().lower()
+            results[key] = answer.startswith("pass")
         return results
 
 
@@ -132,6 +118,23 @@ class LLMPromptScorer:
             logger.log_event(event)
             return event
 
+        except OpenAIError:
+            error_event = AgentEvent(
+                event_type="error",
+                agent_name="LLMPromptScorer",
+                agent_version="2.2.0",
+                timestamp=cet_now(),
+                step_id="scoring",
+                prompt_version=base_name,
+                status="error",
+                payload={"reason": "LLM API unavailable"},
+                meta={
+                    "iteration": iteration,
+                    "scoring_matrix_keys": list(self.scoring_matrix.keys()),
+                },
+            )
+            logger.log_event(error_event)
+            return None
         except LLMUnavailableError:
             # Error already logged in _evaluate_criteria
             return None
