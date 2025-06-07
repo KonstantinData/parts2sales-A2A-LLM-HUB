@@ -1,15 +1,17 @@
-"""Prompt Quality Agent:
-- Bewertet Prompts anhand einer Score-Matrix aus der Config.
-- Nutzt LLM oder regelbasierte Scoring-Matrix.
+"""Prompt Quality Agent used in unit tests.
+
+This simplified agent now only generates a score via a pseudo LLM
+implementation.  Any former matrix based scoring logic has been
+removed so tests rely solely on the single LLM based scorer.
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
 class ScoreResult:
     """Simple container for a prompt score."""
+
     total: float
     method: str
 
@@ -17,21 +19,8 @@ class ScoreResult:
 class PromptQualityAgent:
     """Lightweight prompt quality scorer used in unit tests."""
 
-    def __init__(self, scoring_matrix_path: str | None = None) -> None:
-        self.scoring_matrix_path = scoring_matrix_path
-
-    def load_matrix(self) -> dict:
-        if not self.scoring_matrix_path:
-            return {}
-        import json
-
-        with open(self.scoring_matrix_path, encoding="utf-8") as f:
-            return json.load(f)
-
-    def _matrix_score(self, prompt_text: str) -> float:
-        """Return a deterministic score based on placeholder usage."""
-        placeholders = prompt_text.count("{")
-        return min(1.0, placeholders / 3)
+    def __init__(self) -> None:  # pragma: no cover - simple container
+        pass
 
     def _llm_score(self, prompt_text: str) -> float:
         """Return a dummy LLM-based score.
@@ -41,28 +30,8 @@ class PromptQualityAgent:
         """
         return min(1.0, max(0.0, len(prompt_text) / 100))
 
-    def score_prompt(self, prompt_text: str, method: str = "matrix") -> ScoreResult:
-        """Score ``prompt_text`` using the specified method.
+    def score_prompt(self, prompt_text: str) -> ScoreResult:
+        """Score ``prompt_text`` using the pseudo LLM scorer."""
 
-        Parameters
-        ----------
-        prompt_text:
-            Text of the prompt to evaluate.
-        method:
-            ``"matrix"`` (default), ``"llm"`` or ``"hybrid"``.
-        """
-        method = method.lower()
-        if method not in {"matrix", "llm", "hybrid"}:
-            raise ValueError(f"Unknown scoring method: {method}")
-
-        matrix_score = self._matrix_score(prompt_text)
-        llm_score = self._llm_score(prompt_text)
-
-        if method == "matrix":
-            total = matrix_score
-        elif method == "llm":
-            total = llm_score
-        else:  # hybrid
-            total = (matrix_score + llm_score) / 2
-
-        return ScoreResult(total=total, method=method)
+        total = self._llm_score(prompt_text)
+        return ScoreResult(total=total, method="llm")

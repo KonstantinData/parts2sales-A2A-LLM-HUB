@@ -13,7 +13,8 @@ Author  : Konstantin Milonas with support from AI Copilot
 # - Uses improvement_strategy mapping (Enum-based) per layer.
 # - Stops early when no version change or score improvement is minimal.
 # - Automatically activates detailed_feedback on score failure.
-# - Matrix selection now based on stable layer extraction from filename.
+# - Matrix selection only defines the scoring criteria. All scoring is
+#   performed via the LLM scorer.
 """
 
 import sys
@@ -26,8 +27,8 @@ from utils.time_utils import cet_now, timestamp_for_filename
 import argparse
 
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import clean_base_name, extract_version
-from utils.semantic_versioning_utils import parse_version_from_yaml, bump
+from utils.prompt_versioning import extract_version
+from utils.semantic_versioning_utils import bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.schemas import AgentEvent
