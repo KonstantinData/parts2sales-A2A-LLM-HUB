@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 import re
+import yaml
 
 from utils.time_utils import cet_now, timestamp_for_filename
 from utils.openai_client import OpenAIClient
@@ -97,7 +98,25 @@ Antworte im Format:
 
         try:
             prompt_content = prompt_path.read_text(encoding="utf-8")
+
+            # Detect placeholders in curly braces (legacy style)
             placeholders = re.findall(r"{([^{}]+)}", prompt_content)
+
+            # Detect explicit placeholder tags in the form [[name]]
+            placeholders += re.findall(r"\[\[([^\[\]]+)\]\]", prompt_content)
+
+            # Parse YAML for common fields even without braces
+            try:
+                data = yaml.safe_load(prompt_content) or {}
+                for field in ("id", "objective", "constraints"):
+                    if field in data:
+                        placeholders.append(field)
+            except Exception:
+                pass
+
+            # Deduplicate while preserving order
+            seen = set()
+            placeholders = [p for p in placeholders if not (p in seen or seen.add(p))]
 
             scorer_event = self.scorer.run(
                 prompt_path, base_name, iteration, workflow_id
