@@ -138,7 +138,7 @@ def evaluate_and_improve_prompt(
 
         weighted_score = pq_event.payload.get("weighted_score", 0.0)
 
-        if pq_event.payload.get("passed_llm") or weighted_score >= PASS_THRESHOLD:
+        if weighted_score >= PASS_THRESHOLD:
             print("✅ Prompt passed quality threshold.")
 
             target_name = current_path.name.replace("_raw_", "_template_").rsplit(
