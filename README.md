@@ -10,7 +10,7 @@ The system orchestrates autonomous LLM agents for evaluation, improvement, valid
 
 - **Agentic Prompt Lifecycle:** Automated processing from RAW to PRODUCTION (incl. research loop, scoring, improvement, controller supervision).
 - **Strict Versioning:** Complete support for semantic versioning, auto-increment, promotion, patch bump, and archiving.
-- **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum).
+ - **Flexible Scoring:** Each quality check (raw, template, feature, usecase, industry, company, contact) uses its own scoring matrix (type-safe via Enum). Raw prompts can optionally be scored via the LLM itself by enabling the `use_llm` flag in `LLMPromptScorer`.
 - **Pluggable Agents:** Clearly separated, easily extensible agent classes (Quality, Improvement, Controller, Extraction, Matchmaking, Reasoning, Ops).
 - **Event Logging & Audit Trail:** Every action, score, or improvement is logged as an AgentEvent in JSON with timestamp and version.
 - **Archiving:** Automatic archiving of prompts after every stage transition.
@@ -106,11 +106,15 @@ graph LR
 
 ```env
 OPENAI_API_KEY=sk-...
-THRESHOLD=0.90
+THRESHOLD=0.90        # Optional. Minimum score for LLMPromptScorer (defaults to 0.9)
 MAX_ITERATIONS=3
 HUBSPOT_API_KEY=your-key   # Optional, if CRM sync is enabled
 LOG_LEVEL=INFO
+USE_LLM_SCORING=true      # Enable LLM-based checks for RAW prompts
 ```
+
+`THRESHOLD` controls the minimum score required for a prompt to pass quality
+checks. When not set, the default of `0.9` is used.
 
 ## Getting Started
 
@@ -118,7 +122,7 @@ LOG_LEVEL=INFO
 # Setup
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt  # installs python-dotenv
 
 # Create .env and insert your keys
 
@@ -131,6 +135,7 @@ python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.y
 ## Advanced
 
 - **Scoring Matrix:** Use via Enum `ScoringMatrixType` (in `utils/scoring_matrix_types.py`), type-checked, customizable per agent.
+- **LLM-based scoring:** When `use_llm=True` the quality agent sends prompt and criterion text to OpenAI and interprets the reply as pass/fail (enabled for all prompt stages).
 - **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
 - **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
 

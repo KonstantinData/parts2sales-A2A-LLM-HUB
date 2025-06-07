@@ -16,8 +16,12 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
-from utils.schemas import AgentEvent
+from utils.time_utils import cet_now, timestamp_for_filename
+
+from utils.schemas import AgentEvent, RawPrompt
 from utils.jsonl_event_logger import JsonlEventLogger
+import yaml
+from pydantic import ValidationError
 
 
 class ControllerAgent:
@@ -35,7 +39,7 @@ class ControllerAgent:
         All events are logged into the workflow JSONL file.
         """
         if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
         meta = meta or {}
 
@@ -49,7 +53,7 @@ class ControllerAgent:
                         event_type="error",
                         agent_name="ControllerAgent",
                         agent_version="1.0.0",
-                        timestamp=datetime.utcnow(),
+                        timestamp=cet_now(),
                         step_id=f"controller_step_{step_idx}",
                         prompt_version=None,
                         status="error",
@@ -64,12 +68,43 @@ class ControllerAgent:
                     logger.log_event(error_event)
                     raise ValueError(f"No agent registered for step type '{step_type}'")
 
+                # Validate prompt file if provided
+                params = step.get("params", {})
+                prompt_path = params.get("prompt_path")
+                if prompt_path:
+                    try:
+                        with open(prompt_path, "r", encoding="utf-8") as f:
+                            data = yaml.safe_load(f) or {}
+                        RawPrompt(**data)
+                    except ValidationError as ve:
+                        step_copy = step.copy()
+                        step_params = step_copy.get("params", {}).copy()
+                        if "prompt_path" in step_params:
+                            step_params["prompt_path"] = str(step_params["prompt_path"])
+                        step_copy["params"] = step_params
+                        error_event = AgentEvent(
+                            event_type="error",
+                            agent_name="ControllerAgent",
+                            agent_version="1.0.0",
+                            timestamp=cet_now(),
+                            step_id=f"controller_step_{step_idx}",
+                            prompt_version=None,
+                            status="error",
+                            payload={
+                                "exception": f"Prompt validation failed for {prompt_path}",
+                                "details": str(ve),
+                            },
+                            meta={"step": step_copy, "meta": meta},
+                        )
+                        logger.log_event(error_event)
+                        raise ValueError(f"Prompt validation failed for {prompt_path}: {ve}")
+
                 # Log delegation event
                 delegation_event = AgentEvent(
                     event_type="controller_delegate",
                     agent_name="ControllerAgent",
                     agent_version="1.0.0",
-                    timestamp=datetime.utcnow(),
+                    timestamp=cet_now(),
                     step_id=f"controller_step_{step_idx}",
                     prompt_version=step.get("prompt_version"),
                     status="in_progress",
@@ -90,7 +125,7 @@ class ControllerAgent:
                 event_type="workflow_complete",
                 agent_name="ControllerAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="controller_done",
                 prompt_version=None,
                 status="success",
@@ -109,7 +144,7 @@ class ControllerAgent:
                 event_type="error",
                 agent_name="ControllerAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="controller_error",
                 prompt_version=None,
                 status="error",

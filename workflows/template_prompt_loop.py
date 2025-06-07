@@ -25,6 +25,7 @@ from agents.prompt_improvement_agent import PromptImprovementAgent
 import json
 import shutil
 from datetime import datetime
+from utils.time_utils import cet_now
 
 
 def run_template_loop(
@@ -45,7 +46,7 @@ def run_template_loop(
         score, feedback = quality_agent.run(prompt_text)
         print(f"\n📊 Score: {score}")
 
-        timestamp = datetime.now().strftime("%y%m%d_%H%M")
+        timestamp = cet_now().strftime("%y%m%d_%H%M")
         feedback_path = parent_dir / f"{base_name}_v{version}_feedback_{timestamp}.json"
         feedback_path.write_text(json.dumps(feedback, indent=2, ensure_ascii=False))
 

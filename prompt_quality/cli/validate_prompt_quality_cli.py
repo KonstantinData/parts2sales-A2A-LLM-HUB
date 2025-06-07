@@ -2,11 +2,12 @@ import os
 import argparse
 import sys
 import json
-from datetime import datetime
-from colorama import init, Fore, Style
 
 # Projektpfad für Imports sicherstellen
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from utils.time_utils import cet_now, timestamp_iso
+from colorama import init, Fore, Style
 
 from prompt_quality.validators.validate_prompt_quality_en import validate_prompt_en
 from prompt_quality.languages import lang_en
@@ -41,7 +42,7 @@ def validate_prompt(prompt: str):
 
 
 def log_results(prompt, results, explanation_map, show_score):
-    timestamp = datetime.now().strftime("%y%m%d_%I:%M %p")
+    timestamp = cet_now().strftime("%y%m%d_%I:%M %p")
     log_path = os.path.join(LOG_DIR, f"prompt_check_en_{timestamp}.txt")
     violations = []
     score = 0.0
@@ -82,7 +83,7 @@ def json_output(prompt, results):
         "score": score,
         "violations": violations,
         "checks": results,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": timestamp_iso(),
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
 

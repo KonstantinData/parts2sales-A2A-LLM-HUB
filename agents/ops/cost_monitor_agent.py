@@ -12,6 +12,7 @@ Notes   :
 
 from typing import Dict, Any, Optional
 from datetime import datetime
+from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.event_logger import write_event_log
 from pathlib import Path
@@ -45,7 +46,7 @@ class CostMonitorAgent:
             event_type="cost_monitor",
             agent_name=self.agent_name,
             agent_version=self.agent_version,
-            timestamp=datetime.utcnow(),
+            timestamp=cet_now(),
             step_id=f"{base_name}_v{prompt_version}_it{iteration}",
             prompt_version=prompt_version,
             meta=meta or {},

@@ -16,6 +16,8 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 
+from utils.time_utils import cet_now, timestamp_for_filename
+
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
@@ -45,7 +47,7 @@ class FeatureExtractionAgent:
         All events are logged to the workflow JSONL log.
         """
         if workflow_id is None:
-            workflow_id = f"{datetime.utcnow().isoformat(timespec='seconds').replace(':', '-')}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
@@ -66,7 +68,7 @@ class FeatureExtractionAgent:
                 event_type="feature_extraction",
                 agent_name="FeatureExtractionAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
                 status="success",
@@ -86,7 +88,7 @@ class FeatureExtractionAgent:
                 event_type="error",
                 agent_name="FeatureExtractionAgent",
                 agent_version="1.0.0",
-                timestamp=datetime.utcnow(),
+                timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
                 status="error",

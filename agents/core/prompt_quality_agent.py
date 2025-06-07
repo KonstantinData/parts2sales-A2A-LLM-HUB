@@ -1,16 +1,15 @@
-"""
-Prompt Quality Agent:
+"""Prompt Quality Agent:
 - Bewertet Prompts anhand einer Score-Matrix aus der Config.
 - Nutzt LLM oder regelbasierte Scoring-Matrix.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class ScoreResult:
-    """Simple result object returned by :meth:`score_prompt`."""
-
+    """Simple container for a prompt score."""
     total: float
     method: str
 
@@ -31,7 +30,6 @@ class PromptQualityAgent:
 
     def _matrix_score(self, prompt_text: str) -> float:
         """Return a deterministic score based on placeholder usage."""
-
         placeholders = prompt_text.count("{")
         return min(1.0, placeholders / 3)
 
@@ -41,7 +39,6 @@ class PromptQualityAgent:
         In the test environment we do not call an actual LLM, so this
         implementation derives a pseudo score from the prompt length.
         """
-
         return min(1.0, max(0.0, len(prompt_text) / 100))
 
     def score_prompt(self, prompt_text: str, method: str = "matrix") -> ScoreResult:
@@ -54,7 +51,6 @@ class PromptQualityAgent:
         method:
             ``"matrix"`` (default), ``"llm"`` or ``"hybrid"``.
         """
-
         method = method.lower()
         if method not in {"matrix", "llm", "hybrid"}:
             raise ValueError(f"Unknown scoring method: {method}")
