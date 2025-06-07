@@ -121,7 +121,9 @@ Antworte im Format:
                 return None
 
             payload = {
-                "criteria_results": scorer_event.payload.get("criteria_results"),
+                "criteria_scores": scorer_event.payload.get("criteria_scores"),
+                "weighted_score": scorer_event.payload.get("weighted_score"),
+                "matrix_feedback": scorer_event.payload.get("matrix_feedback"),
             }
 
             if detailed_feedback:

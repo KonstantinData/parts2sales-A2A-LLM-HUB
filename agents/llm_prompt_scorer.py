@@ -21,6 +21,8 @@ from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
 from typing import Optional
+import re
+from config.scoring.raw_scoring_matrix import compute_weighted_score
 
 
 class LLMUnavailableError(Exception):
@@ -49,32 +51,50 @@ class LLMPromptScorer:
         logger: JsonlEventLogger,
         base_name: str,
         iteration: int,
-    ) -> dict:
+    ) -> tuple[dict, list]:
         """
         Evaluates all criteria from the scoring matrix against the prompt content.
-        Returns a dict: {criterion: bool}
+        Returns a tuple: (scores dict, matrix feedback list)
         """
         results = {}
+        matrix_feedback: list[str] = []
+
         for key, rule in self.scoring_matrix.items():
             if self.llm is None:
                 raise LLMUnavailableError("LLM client not provided")
 
+            llm_score_prompt = rule.get("llm_score")
             description = rule.get("description", "")
-            prompt = (
-                "Does the following prompt meet this criterion?\n"
-                f"Criterion: {description}\n"
-                "Answer only with 'PASS' or 'FAIL'.\n\n"
-                f"Prompt:\n{prompt_content}"
-            )
+            if llm_score_prompt:
+                prompt = (
+                    f"{llm_score_prompt}\n\nPrompt:\n{prompt_content}\n"
+                    "Answer with a single number between 0 and 1."
+                )
+            else:
+                prompt = (
+                    f"On a scale from 0 to 1, rate the following criterion:\n{description}\n\n"
+                    f"Prompt:\n{prompt_content}\nAnswer with a single number between 0 and 1."
+                )
+
             response = self.llm.chat_completion(
                 prompt=prompt,
                 temperature=0.0,
-                max_tokens=5,
+                max_tokens=10,
             )
-            answer = response.choices[0].message.get("content", "").strip().lower()
-            results[key] = answer.startswith("pass")
-        return results
 
+            answer = response.choices[0].message.get("content", "").strip()
+            match = re.search(r"([01](?:\.\d+)?)", answer)
+            try:
+                score = float(match.group(1)) if match else float(answer)
+            except (ValueError, AttributeError):
+                score = 0.0
+            score = max(0.0, min(1.0, score))
+            results[key] = score
+
+            if rule.get("feedback"):
+                matrix_feedback.append({"criterion": key, "feedback": rule["feedback"]})
+
+        return results, matrix_feedback
 
     def run(
         self, prompt_path: Path, base_name: str, iteration: int, workflow_id: str = None
@@ -93,12 +113,16 @@ class LLMPromptScorer:
                 prompt_content = f.read()
 
             # Evaluate criteria
-            criteria_results = self._evaluate_criteria(
+            criteria_scores, matrix_feedback = self._evaluate_criteria(
                 prompt_content, logger, base_name, iteration
             )
 
+            weighted_score = compute_weighted_score(criteria_scores)
+
             payload = {
-                "criteria_results": criteria_results,
+                "criteria_scores": criteria_scores,
+                "weighted_score": weighted_score,
+                "matrix_feedback": matrix_feedback,
             }
 
             event = AgentEvent(
