@@ -136,9 +136,7 @@ Antworte im Format:
 
             # Optional: Create PDF summary report
             try:
-                PDFReportGenerator(Path("templates"), Path("logs/reports")).generate(
-                    workflow_id, [event.model_dump()]
-                )
+                generate_pdf_report(logger.log_path)
             except Exception as report_err:
                 print(f"⚠️ Failed to generate PDF report: {report_err}")
 
