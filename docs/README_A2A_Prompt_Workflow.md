@@ -58,8 +58,9 @@ This prompt development workflow supports iterative evaluation and improvement w
 1. **Start with a Raw prompt file** (`*_raw_vX.Y.Z.yaml`)
 2. **Log initial prompt state**
 3. **Run `PromptQualityAgent` to evaluate prompt quality**
-4. **Write quality and weighted score logs**
+4. **Write quality and score logs**
 5. **Evaluate if score meets the threshold**
+   - If the OpenAI API is unavailable, scoring fails and an error event is logged.
    - If yes, save prompt as `*_config_vX.Y.Z.yaml` in `01-examples/`
    - If no, run `PromptImprovementAgent` to create improved prompt
 6. **Log improved prompt and feedback**
@@ -75,7 +76,7 @@ All intermediate states are logged in `/logs/` under these categories:
 - `quality_log/`
 - `feedback_log/`
 - `change_log/`
-- `weighted_score/`
+- `score_log/`
 
 Each log entry is a fully validated JSON event for traceability and monitoring.
 

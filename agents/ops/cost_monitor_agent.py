@@ -6,7 +6,7 @@ Version : 1.0.1
 Author  : Konstantin & AI Copilot
 Notes   :
 - Aggregates API call costs by agent and run.
-- Logs all cost events exclusively to logs/weighted_score/
+- Logs all cost events exclusively to logs/score_log/
 - Designed for integration into pipeline or as a CLI utility.
 """
 
@@ -17,7 +17,7 @@ from utils.schemas import AgentEvent
 from utils.event_logger import write_event_log
 from pathlib import Path
 
-LOG_DIR = Path("logs") / "weighted_score"
+LOG_DIR = Path("logs") / "score_log"
 
 
 class CostMonitorAgent:

@@ -13,6 +13,7 @@ Do not use local log files, scattered per-agent logs, or any kind of legacy outp
   - Location: `logs/workflows/`
   - Pattern: `{timestamp}_workflow_{workflow_id}.jsonl`
 - All agent events (success and error) are recorded as structured `AgentEvent` objects, one per line, in the workflow log.
+- If the OpenAI API is unreachable during scoring, the agent logs an error event and the run stops.
 - No more legacy logs in `logs/quality_check/`, `logs/prompt_improvement/`, `logs/controller_decision/`, or any `data/outputs/` directory.
 
 #### What must developers do?
