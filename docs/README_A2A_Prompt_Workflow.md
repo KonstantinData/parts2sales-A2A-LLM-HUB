@@ -89,6 +89,27 @@ Each log entry is a fully validated JSON event for traceability and monitoring.
 - Keep scoring and configuration files versioned in `config/`.
 - Ensure prompt versions inside files and filenames always match.
 
+### Placeholder Feedback
+
+`PromptQualityAgent` can generate detailed feedback for specific positions in a
+prompt. Placeholders in curly braces remain supported, but you can now also use
+explicit tags (`[[placeholder]]`). Additionally, common YAML fields such as
+`id`, `objective` and `constraints` are automatically evaluated even when they
+contain no braces.
+
+Example snippet:
+
+```yaml
+id: contact_assignment
+objective: >
+  [[objective]]
+constraints:
+  - [[constraints]]
+```
+
+Detected placeholders are listed in the `detailed_feedback` section of the
+quality check result.
+
 ## Deployment Targets
 
 Production prompts (`*_active_vX.Y.Z.yaml`) are ready for deployment to:
