@@ -30,6 +30,7 @@ from utils.prompt_versioning import clean_base_name, extract_version
 from utils.semantic_versioning_utils import bump
 from utils.scoring_matrix_types import ScoringMatrixType
 from utils.jsonl_event_logger import JsonlEventLogger
+from utils.pdf_report_generator import generate_pdf_report
 from utils.schemas import AgentEvent
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
@@ -199,6 +200,13 @@ def evaluate_and_improve_prompt(
 
         if iteration >= 7:
             print("⛔️ Max iterations reached. Aborting.")
+
+    # Generate PDF summary of the workflow log
+    try:
+        pdf_path = generate_pdf_report(logger.log_path)
+        print(f"📝 Workflow report saved to: {pdf_path}")
+    except Exception as e:
+        print(f"⚠️ Failed to generate PDF report: {e}")
 
 
 def main():
