@@ -2,7 +2,7 @@
 run_prompt_lifecycle.py
 
 Purpose : Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
-Version : 1.4.3
+Version : 1.4.4
 Author  : Konstantin Milonas with support from AI Copilot
 
 # Notes:
@@ -36,11 +36,9 @@ from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
 from utils.improvement_strategies import ImprovementStrategy
 
-# Config
 PASS_THRESHOLD = 0.85
 TARGET_VERSION = "v0.2.0"
 
-# Strategy mapping
 improvement_strategy_lookup = {
     "raw": ImprovementStrategy.LLM,
     "template": ImprovementStrategy.LLM,
@@ -51,7 +49,6 @@ improvement_strategy_lookup = {
     "contact_assign": ImprovementStrategy.LLM,
 }
 
-# Matrix mapping
 matrix_lookup = {
     "raw": "RAW",
     "template": "TEMPLATE",
@@ -64,9 +61,6 @@ matrix_lookup = {
 
 
 def extract_layer_from_filename(filename: str) -> str:
-    """
-    Extract the layer from the filename using known matrix layer keys.
-    """
     known_layers = {
         "raw",
         "template",
@@ -76,11 +70,9 @@ def extract_layer_from_filename(filename: str) -> str:
         "company_assign",
         "contact_assign",
     }
-
     for part in filename.split("_"):
         if part in known_layers:
             return part
-
     raise ValueError(f"Unable to determine matrix layer from filename: {filename}")
 
 
@@ -134,7 +126,6 @@ def evaluate_and_improve_prompt(
         if pq_event.payload.get("passed_llm") or weighted_score >= PASS_THRESHOLD:
             print("✅ Prompt passed quality threshold.")
 
-            # Final Save to Template Layer
             target_name = current_path.name.replace("_raw_", "_template_").rsplit(
                 "_v", 1
             )[0]
@@ -201,7 +192,6 @@ def evaluate_and_improve_prompt(
         if iteration >= 7:
             print("⛔️ Max iterations reached. Aborting.")
 
-    # Generate PDF summary of the workflow log
     try:
         pdf_path = generate_pdf_report(logger.log_path)
         print(f"📝 Workflow report saved to: {pdf_path}")

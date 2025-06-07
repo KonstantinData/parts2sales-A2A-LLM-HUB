@@ -26,6 +26,10 @@ from utils.jsonl_event_logger import JsonlEventLogger
 from utils.scoring_matrix_loader import load_scoring_matrix
 from utils.scoring_matrix_types import ScoringMatrixType
 from agents.llm_prompt_scorer import LLMPromptScorer
+from utils.pdf_report_generator import generate_pdf_report
+
+
+# falls nicht vorhanden, bitte importieren
 
 
 class PromptQualityAgent:
@@ -35,11 +39,6 @@ class PromptQualityAgent:
         openai_client: OpenAIClient,
         log_dir=Path("logs/workflows"),
     ):
-        """
-        scoring_matrix_type: Enum value defining which scoring matrix to load
-        openai_client: injected OpenAIClient instance
-        log_dir: directory for workflow logs (default: logs/workflows)
-        """
         self.scoring_matrix_type = scoring_matrix_type
         self.scoring_matrix = load_scoring_matrix(scoring_matrix_type)
         self.llm = openai_client
@@ -51,11 +50,6 @@ class PromptQualityAgent:
         )
 
     def _generate_llm_detailed_feedback(self, placeholders, prompt_text):
-        """
-        For each placeholder in the prompt, ask the LLM to evaluate
-        its semantic quality and compliance with scoring matrix expectations.
-        Returns a list of {position, feedback} dicts.
-        """
         results = []
         for ph in placeholders:
             criteria = self.scoring_matrix.get(ph, "Keine spezifische Regel vorhanden.")
@@ -97,21 +91,12 @@ Antworte im Format:
         workflow_id: str = None,
         detailed_feedback: bool = False,
     ):
-        """
-        Runs the prompt quality evaluation by delegating to LLMPromptScorer.
-        Logs events under the workflow JSONL log.
-        Ensures structured feedback (list) for downstream improvement agent.
-        If ``detailed_feedback`` is True, additional placeholder-level
-        feedback is returned under ``payload['detailed_feedback']``.
-        """
         if workflow_id is None:
             workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                prompt_content = f.read()
-
+            prompt_content = prompt_path.read_text(encoding="utf-8")
             placeholders = re.findall(r"{([^{}]+)}", prompt_content)
 
             scorer_event = self.scorer.run(
@@ -121,9 +106,9 @@ Antworte im Format:
                 return None
 
             payload = {
-                "criteria_scores": scorer_event.payload.get("criteria_scores"),
-                "weighted_score": scorer_event.payload.get("weighted_score"),
-                "matrix_feedback": scorer_event.payload.get("matrix_feedback"),
+                "criteria_scores": scorer_event.payload.get("criteria_scores", {}),
+                "weighted_score": scorer_event.payload.get("weighted_score", 0.0),
+                "matrix_feedback": scorer_event.payload.get("matrix_feedback", []),
             }
 
             if detailed_feedback:
@@ -135,7 +120,7 @@ Antworte im Format:
             event = AgentEvent(
                 event_type="quality_check",
                 agent_name="PromptQualityAgent",
-                agent_version="1.7.0",
+                agent_version="1.8.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,
@@ -148,6 +133,15 @@ Antworte im Format:
             )
 
             logger.log_event(event)
+
+            # Optional: Create PDF summary report
+            try:
+                PDFReportGenerator(Path("templates"), Path("logs/reports")).generate(
+                    workflow_id, [event.model_dump()]
+                )
+            except Exception as report_err:
+                print(f"⚠️ Failed to generate PDF report: {report_err}")
+
             return event
 
         except Exception as ex:
@@ -156,7 +150,7 @@ Antworte im Format:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.7.0",
+                agent_version="1.8.0",
                 timestamp=cet_now(),
                 step_id="quality_evaluation",
                 prompt_version=base_name,

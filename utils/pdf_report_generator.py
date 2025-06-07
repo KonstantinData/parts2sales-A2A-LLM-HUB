@@ -5,6 +5,8 @@ from typing import Iterable, Dict, Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
+__all__ = ["generate_pdf_report"]
+
 
 def load_events(jsonl_path: Path) -> Iterable[Dict[str, Any]]:
     """Load AgentEvent entries from a JSONL workflow log."""
@@ -35,6 +37,7 @@ def generate_pdf_report(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = output_dir / f"{log_path.stem}_report.pdf"
-    HTML(string=html_content, base_url=str(template_path.parent)).write_pdf(str(pdf_path))
+    HTML(string=html_content, base_url=str(template_path.parent)).write_pdf(
+        str(pdf_path)
+    )
     return pdf_path
-
