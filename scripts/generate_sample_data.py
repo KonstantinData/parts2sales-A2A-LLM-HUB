@@ -12,6 +12,9 @@ def convert_excel_to_json(excel_path: Path, json_path: Path, columns: list[str] 
     # Read Excel file
     df = pd.read_excel(excel_path, engine="openpyxl")
 
+    # Optional: Check available columns for debugging
+    print("Available columns:", df.columns.tolist())
+
     # Select columns if specified
     if columns:
         df = df[columns]
@@ -59,6 +62,6 @@ if __name__ == "__main__":
     else:
         json_file = args.out
 
-    cols = ["part_number", "title", "manufacturer"]
+    cols = ["Manufacturer Part Number", "Title", "Manufacturer"]
 
     convert_excel_to_json(Path(excel_file), Path(json_file), cols)

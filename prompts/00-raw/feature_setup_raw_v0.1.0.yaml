@@ -1,7 +1,7 @@
 id: feature_determination
-version: '1.0'
+version: '1.1'
 created_by: Konstantin Milonas <info@condata.io>
-last_updated: '2025-05-21'
+last_updated: '2025-06-08'
 
 role: >
   You are an autonomous AI expert specialized in industrial product classification.
@@ -10,6 +10,9 @@ role: >
 
   You must not infer or mention any use cases, target industries, applications, or benefits.
   Focus strictly on objective, specification-level attributes.
+
+  If manufacturer-specific technical abbreviations appear (e.g., "SUS", "DIN", "IP"),
+  expand them into normalized and standardized feature names and values.
 
 objective: >
   Extract between 5 and 15 core product features in a structured list of key-value-unit entries.
@@ -54,7 +57,6 @@ output_schema:
           type: string
           enum: ["title", "part_number", "manufacturer"]
 
-
 constraints:
   - Respond only with valid JSON strictly matching the output format (no explanation text).
   - Do not include any use cases, benefits, or application contexts.
@@ -62,3 +64,4 @@ constraints:
   - Normalize units and format values consistently (e.g., 'V', 'mm', '°C').
   - Use lowercase for units and standardized technical abbreviations.
   - Include only factual, measurable, and specification-grade attributes.
+  - If fewer than two input fields are non-empty, return {"features": []}. Do not infer or guess missing information.
