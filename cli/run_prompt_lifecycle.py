@@ -1,275 +1,61 @@
+# cli/run_prompt_lifecycle.py
+
 """
-run_prompt_lifecycle.py
+Prompt Lifecycle Runner
 
-Purpose : Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
-Version : 1.4.4
-Author  : Konstantin Milonas with support from AI Copilot
+Version: 2.0.0
+Author: Konstantin Milonas with Agentic AI Copilot support
 
-# Notes:
-# - All agent events (success & error) are logged in a single workflow JSONL file.
-# - Each workflow/session gets a unique workflow_id for full traceability.
-# - No more per-agent or per-step logs – just one JSONL log per workflow.
-# - Requires all agents to accept and use the workflow_id.
-# - Uses improvement_strategy mapping (Enum-based) per layer.
-# - Stops early when no version change or score improvement is minimal.
-# - Automatically activates detailed_feedback on score failure.
-# - Matrix selection only defines the scoring criteria. All scoring is
-#   performed via the LLM scorer.
+Purpose:
+Orchestrates full prompt lifecycle with centralized, workflow-centric JSONL logging.
+Triggers evaluation, improvement, and re-evaluation using ControllerAgent.
+Logs all AgentEvents with workflow_id traceability.
 """
 
 import sys
 from pathlib import Path
 from uuid import uuid4
+import argparse
+import json
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from utils.time_utils import cet_now, timestamp_for_filename
-import yaml
-import argparse
+from utils.time_utils import timestamp_for_filename, cet_now
 from utils.openai_client import OpenAIClient
-from utils.prompt_versioning import clean_base_name, extract_version
-from utils.semantic_versioning_utils import bump
-from utils.scoring_matrix_types import ScoringMatrixType
-from utils.jsonl_event_logger import JsonlEventLogger
-from utils.pdf_report_generator import generate_pdf_report
+from agents.controller_agent import ControllerAgent
 from utils.schemas import AgentEvent
-from agents.prompt_quality_agent import PromptQualityAgent
-from agents.prompt_improvement_agent import PromptImprovementAgent
-from utils.improvement_strategies import ImprovementStrategy
-
-DEFAULT_PASS_THRESHOLD = 0.85
 
 
-def load_threshold_config() -> tuple[dict, int]:
-    """Load all quality thresholds and max retries from config/thresholds.yaml."""
-    config_path = Path("config/thresholds.yaml")
-    try:
-        with config_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    except Exception:
-        data = {}
-
-    thresholds = {
-        k: float(v)
-        for k, v in data.items()
-        if k != "max_retries" and isinstance(v, (int, float, str))
-    }
-    if "prompt_quality" not in thresholds:
-        thresholds["prompt_quality"] = DEFAULT_PASS_THRESHOLD
-    max_retries = int(data.get("max_retries", 7))
-    return thresholds, max_retries
-
-
-THRESHOLDS, MAX_RETRIES = load_threshold_config()
-
-
-def threshold_key_for_layer(layer: str) -> str:
-    mapping = {
-        "raw": "prompt_quality",
-        "template": "prompt_quality",
-        "feature_setup": "feature_quality",
-        "usecase_detect": "usecase_quality",
-        "industry_class": "industry_quality",
-        "company_assign": "company_quality",
-        "contact_assign": "contact_quality",
-    }
-    if layer not in mapping:
-        raise KeyError(f"No threshold mapping for layer '{layer}'")
-    return mapping[layer]
-
-
-def get_pass_threshold(layer: str) -> float:
-    key = threshold_key_for_layer(layer)
-    if key not in THRESHOLDS:
-        raise KeyError(
-            f"Threshold '{key}' not found in config/thresholds.yaml"
-        )
-    return THRESHOLDS[key]
-TARGET_VERSION = "v0.2.0"
-
-improvement_strategy_lookup = {
-    "raw": ImprovementStrategy.LLM,
-    "template": ImprovementStrategy.LLM,
-    "feature_setup": ImprovementStrategy.LLM,
-    "usecase_detect": ImprovementStrategy.RULE_BASED,
-    "industry_class": ImprovementStrategy.LLM,
-    "company_assign": ImprovementStrategy.RULE_BASED,
-    "contact_assign": ImprovementStrategy.LLM,
-}
-
-matrix_lookup = {
-    "raw": "RAW",
-    "template": "TEMPLATE",
-    "feature_setup": "FEATURE",
-    "usecase_detect": "USECASE",
-    "industry_class": "INDUSTRY",
-    "company_assign": "COMPANY",
-    "contact_assign": "CONTACT",
-}
-
-
-def extract_layer_from_filename(filename: str) -> str:
-    known_layers = {
-        "raw",
-        "template",
-        "feature_setup",
-        "usecase_detect",
-        "industry_class",
-        "company_assign",
-        "contact_assign",
-    }
-    for part in filename.split("_"):
-        if part in known_layers:
-            return part
-    raise ValueError(f"Unable to determine matrix layer from filename: {filename}")
-
-
-def evaluate_and_improve_prompt(
-    path: Path, layer: str = "feature_setup", openai_client=None
-):
-    workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
-    logger = JsonlEventLogger(workflow_id, Path("logs/workflows"))
-
-    iteration = 0
-    current_path = path
-    prev_score = None
-    prev_version = extract_version(current_path.name)
-
-    layer_from_file = extract_layer_from_filename(current_path.name)
-    improvement_strategy = improvement_strategy_lookup.get(
-        layer_from_file, ImprovementStrategy.LLM
-    )
-    matrix_key = matrix_lookup.get(layer_from_file)
-
-    if not matrix_key:
-        raise ValueError(f"Unknown or unmapped matrix layer '{layer_from_file}'.")
-
-    matrix_type = ScoringMatrixType[matrix_key]
-
-    pass_threshold = get_pass_threshold(layer_from_file)
-
-    while iteration < MAX_RETRIES:
-        iteration += 1
-        current_version = extract_version(current_path.name)
-        print(
-            f"🔍 Processing {current_path.name} (iteration {iteration} | version {current_version})"
-        )
-
-        quality_agent = PromptQualityAgent(
-            scoring_matrix_type=matrix_type, openai_client=openai_client
-        )
-        improvement_agent = PromptImprovementAgent(
-            improvement_strategy=improvement_strategy, openai_client=openai_client
-        )
-
-        pq_event = quality_agent.run(
-            current_path,
-            base_name=layer_from_file,
-            iteration=iteration,
-            workflow_id=workflow_id,
-            detailed_feedback=True,
-        )
-        logger.log_event(pq_event)
-
-        weighted_score = pq_event.payload.get("weighted_score", 0.0)
-
-        if weighted_score >= pass_threshold:
-            print("✅ Prompt passed quality threshold.")
-
-            target_name = current_path.name.replace("_raw_", "_template_").rsplit(
-                "_v", 1
-            )[0]
-            target_path = (
-                Path("prompts/01-template") / f"{target_name}_{TARGET_VERSION}.yaml"
-            )
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_text(current_path.read_text(), encoding="utf-8")
-            print(f"📦 Prompt exported to: {target_path}")
-            break
-
-        score = weighted_score
-        if prev_score is not None:
-            score_diff = score - prev_score
-            if current_version == prev_version or score_diff < 0.01:
-                print("⛔️ Early stop: version unchanged or score improvement < 0.01")
-                stop_event = AgentEvent(
-                    event_type="early_stop",
-                    agent_name="LifecycleManager",
-                    agent_version="1.0.0",
-                    timestamp=cet_now(),
-                    step_id="evaluation_loop",
-                    prompt_version=current_version,
-                    status="stopped",
-                    payload={"reason": "no_improvement", "score_diff": score_diff},
-                    meta={"iteration": iteration},
-                )
-                logger.log_event(stop_event)
-                break
-
-        prev_score = score
-        prev_version = current_version
-
-        improvement_feedback = (
-            pq_event.payload.get("detailed_feedback")
-            or pq_event.payload.get("llm_feedback")
-            or pq_event.payload.get("matrix_feedback")
-            or []
-        )
-
-        improvement_event = improvement_agent.run(
-            prompt_path=current_path,
-            base_name=layer_from_file,
-            iteration=iteration,
-            workflow_id=workflow_id,
-            feedback=improvement_feedback,
-        )
-        logger.log_event(improvement_event)
-
-        old_version = current_version
-        new_version = improvement_event.meta.get("new_version") or bump(
-            old_version, "patch"
-        )
-        print(f"📈 Version bump: {old_version} -> {new_version}")
-
-        if "updated_path" in improvement_event.meta:
-            current_path = Path(improvement_event.meta["updated_path"])
-        else:
-            print(
-                "⚠️ No updated_path found in improvement_event.meta. Stopping iteration."
-            )
-            break
-
-        if iteration >= MAX_RETRIES:
-            print("⛔️ Max iterations reached. Aborting.")
-
-    try:
-        pdf_path = generate_pdf_report(logger.log_path)
-        print(f"📝 Workflow report saved to: {pdf_path}")
-    except Exception as e:
-        print(f"⚠️ Failed to generate PDF report: {e}")
+def write_event_log(events: list[AgentEvent], log_path: Path) -> None:
+    with log_path.open("w", encoding="utf-8") as f:
+        for event in events:
+            f.write(event.model_dump_json() + "\n")
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--file", help="Path to prompt YAML")
+    parser = argparse.ArgumentParser(description="Run full prompt lifecycle.")
     parser.add_argument(
-        "--all", action="store_true", help="Evaluate all prompts in prompts/00-raw"
+        "--file", type=str, required=True, help="Path to raw prompt YAML file."
     )
-    parser.add_argument("--layer", default="feature_setup", help="Scoring layer name")
     args = parser.parse_args()
 
-    openai_client = OpenAIClient()
+    prompt_path = args.file
+    workflow_id = f"{timestamp_for_filename()}_{uuid4().hex[:6]}"
 
-    if args.all:
-        raw_dir = Path("prompts/00-raw")
-        for file in raw_dir.glob("*.yaml"):
-            evaluate_and_improve_prompt(file, args.layer, openai_client=openai_client)
-    elif args.file:
-        evaluate_and_improve_prompt(
-            Path(args.file), args.layer, openai_client=openai_client
-        )
-    else:
-        print("⚠️ Please provide either --file or --all")
+    print(f"🔁 Starting lifecycle for: {prompt_path}")
+    print(f"🆔 Workflow ID: {workflow_id}")
+
+    client = OpenAIClient()
+    controller = ControllerAgent(client=client, workflow_id=workflow_id)
+    events = controller.run(prompt_path)
+
+    log_dir = Path("logs") / "workflow"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{workflow_id}_workflow.jsonl"
+
+    write_event_log(events, log_path)
+
+    print(f"✅ Lifecycle completed. Log written to: {log_path}")
 
 
 if __name__ == "__main__":

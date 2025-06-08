@@ -1,164 +1,72 @@
 """
 prompt_quality_agent.py
 
-Purpose : Evaluates prompt quality using a scoring matrix and integrates LLMPromptScorer for scoring.
-Logging : Logs all events (success and error) into a centralized JSONL workflow log via JsonlEventLogger.
-
-Author  : Konstantin Milonas with support from AI Copilot
-
-# Notes:
-# - Delegates scoring to LLMPromptScorer to maintain single source of truth for scoring logic.
-# - Maintains centralized workflow JSONL logging for traceability.
-# - Logs all agent actions and errors as structured AgentEvents.
-# - Designed for scalable, auditable prompt quality evaluation.
-# - Optionally triggers LLM-based detailed feedback generation per placeholder using scoring matrix context.
+Purpose : Evaluates prompt features for quality using LLM scoring.
+Version : 2.0.0
+Author  : Konstantin Milonas with Agentic AI Copilot support
 """
 
 from pathlib import Path
-from datetime import datetime
+import json
 from uuid import uuid4
-import re
-import yaml
 
-from utils.time_utils import cet_now, timestamp_for_filename
-from utils.openai_client import OpenAIClient
 from utils.schemas import AgentEvent
+from utils.time_utils import cet_now
 from utils.jsonl_event_logger import JsonlEventLogger
-from utils.scoring_matrix_loader import load_scoring_matrix
-from utils.scoring_matrix_types import ScoringMatrixType
-from agents.llm_prompt_scorer import LLMPromptScorer
-from utils.pdf_report_generator import generate_pdf_report
-
-
-# falls nicht vorhanden, bitte importieren
+from utils.openai_client import OpenAIClient
+from utils.agent_outputs import FeatureExtractionOutput
 
 
 class PromptQualityAgent:
-    def __init__(
-        self,
-        scoring_matrix_type,
-        openai_client: OpenAIClient,
-        log_dir=Path("logs/workflows"),
-    ):
-        self.scoring_matrix_type = scoring_matrix_type
-        self.scoring_matrix = load_scoring_matrix(scoring_matrix_type)
+    def __init__(self, openai_client: OpenAIClient, log_dir=Path("logs/workflows")):
         self.llm = openai_client
         self.log_dir = log_dir
-        self.scorer = LLMPromptScorer(
-            self.scoring_matrix,
-            self.llm,
-            log_dir=self.log_dir,
-        )
-
-    def _generate_llm_detailed_feedback(self, placeholders, prompt_text):
-        results = []
-        for ph in placeholders:
-            criteria = self.scoring_matrix.get(ph, "Keine spezifische Regel vorhanden.")
-            prompt = f"""
-Du bist ein Prompt-Qualitätsbewerter. Analysiere die folgende Platzhalter-Position im gegebenen Prompt.
-
-Prompt:
-{prompt_text}
-
-Platzhalter: {{{ph}}}
-Matrix-Anforderung: {criteria}
-
-Beurteile, ob die Position semantisch sinnvoll und regelkonform ist. Gib eine Begründung und eine Verbesserungsempfehlung.
-Antworte im Format:
-- Bewertung:
-- Empfehlung:
-"""
-            try:
-                response = (
-                    self.llm.chat_completion(
-                        prompt=prompt,
-                        temperature=0.3,
-                        max_tokens=300,
-                    )
-                    .choices[0]
-                    .message.get("content", "")
-                    .strip()
-                )
-            except Exception as ex:
-                response = f"Fehler bei LLM-Auswertung: {ex}"
-            results.append({"position": ph, "feedback": response.strip()})
-        return results
 
     def run(
         self,
-        prompt_path: Path,
+        input_data: FeatureExtractionOutput,
         base_name: str,
         iteration: int,
-        workflow_id: str = None,
-        detailed_feedback: bool = False,
-    ):
-        if workflow_id is None:
-            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
+        workflow_id: str,
+        parent_event_id: str = None,
+    ) -> AgentEvent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            prompt_content = prompt_path.read_text(encoding="utf-8")
-
-            # Detect placeholders in curly braces (legacy style)
-            placeholders = re.findall(r"{([^{}]+)}", prompt_content)
-
-            # Detect explicit placeholder tags in the form [[name]]
-            placeholders += re.findall(r"\[\[([^\[\]]+)\]\]", prompt_content)
-
-            # Parse YAML for common fields even without braces
-            try:
-                data = yaml.safe_load(prompt_content) or {}
-                for field in ("id", "objective", "constraints"):
-                    if field in data:
-                        placeholders.append(field)
-            except Exception:
-                pass
-
-            # Deduplicate while preserving order
-            seen = set()
-            placeholders = [p for p in placeholders if not (p in seen or seen.add(p))]
-
-            scorer_event = self.scorer.run(
-                prompt_path, base_name, iteration, workflow_id
+            # Convert input for evaluation
+            features_json = input_data.features_extracted
+            score_prompt = (
+                f"Evaluate the following extracted features for clarity and usefulness:\n\n"
+                f"{json.dumps(features_json, indent=2)}\n\n"
+                f'Respond with a JSON object like: {{"score": 0.0–1.0, "feedback": "..."}}'
             )
-            if scorer_event is None:
-                return None
+
+            response = self.llm.chat(prompt=score_prompt)
+            result = json.loads(response)
 
             payload = {
-                "criteria_scores": scorer_event.payload.get("criteria_scores", {}),
-                "weighted_score": scorer_event.payload.get("weighted_score", 0.0),
-                "matrix_feedback": scorer_event.payload.get("matrix_feedback", []),
+                "input": features_json,
+                "score": result.get("score"),
+                "feedback": result.get("feedback", ""),
             }
 
-            if detailed_feedback:
-                detailed_feedback_llm = self._generate_llm_detailed_feedback(
-                    placeholders, prompt_content
-                )
-                payload["detailed_feedback"] = detailed_feedback_llm
-
             event = AgentEvent(
-                event_type="quality_check",
+                event_type="prompt_quality",
                 agent_name="PromptQualityAgent",
-                agent_version="1.8.0",
+                agent_version="2.0.0",
                 timestamp=cet_now(),
-                step_id="quality_evaluation",
+                step_id="prompt_quality_evaluation",
                 prompt_version=base_name,
                 status="success",
                 payload=payload,
                 meta={
                     "iteration": iteration,
-                    "scoring_matrix_type": str(self.scoring_matrix_type),
+                    "retry_allowed": True,
+                    "retry_count": 0,
                 },
+                parent_event_id=parent_event_id,
             )
-
             logger.log_event(event)
-
-            # Optional: Create PDF summary report
-            try:
-                generate_pdf_report(logger.log_path)
-            except Exception as report_err:
-                print(f"⚠️ Failed to generate PDF report: {report_err}")
-
             return event
 
         except Exception as ex:
@@ -167,9 +75,9 @@ Antworte im Format:
             error_event = AgentEvent(
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="1.8.0",
+                agent_version="2.0.0",
                 timestamp=cet_now(),
-                step_id="quality_evaluation",
+                step_id="prompt_quality_evaluation",
                 prompt_version=base_name,
                 status="error",
                 payload={
@@ -178,8 +86,10 @@ Antworte im Format:
                 },
                 meta={
                     "iteration": iteration,
-                    "scoring_matrix_type": str(self.scoring_matrix_type),
+                    "retry_allowed": True,
+                    "retry_count": 0,
                 },
+                parent_event_id=parent_event_id,
             )
             logger.log_event(error_event)
             raise

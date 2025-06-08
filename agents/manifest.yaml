@@ -1,0 +1,28 @@
+# agents/manifest.yaml
+
+FeatureExtractionAgent:
+  version: 2.0.0
+  input_format: prompt
+  output_format: json
+  dependencies: []
+
+PromptQualityAgent:
+  version: 2.0.0
+  input_format: json
+  output_format: evaluation
+  dependencies:
+    - FeatureExtractionAgent
+
+ControllerAgent:
+  version: 2.0.0
+  input_format: prompt
+  output_format: summary
+  dependencies:
+    - FeatureExtractionAgent
+    - PromptQualityAgent
+
+CostMonitorAgent:
+  version: 1.0.0
+  input_format: any
+  output_format: usage_log
+  dependencies: []
