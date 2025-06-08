@@ -136,6 +136,26 @@ python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.y
 - **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
 - **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
 
+### Threshold Configuration
+
+The quality thresholds for each scoring layer and the maximum number of
+improvement cycles are defined in `config/thresholds.yaml`.
+
+```yaml
+prompt_quality: 0.90
+feature_quality: 0.90
+usecase_quality: 0.90
+industry_quality: 0.90
+company_quality: 0.90
+# contact_quality: 0.90  # optional
+max_retries: 7
+```
+
+`run_prompt_lifecycle.py` determines the layer from the prompt filename and
+loads the matching threshold value. If a key is missing, execution aborts with a
+clear error message. The `max_retries` value controls how many improvement
+iterations are attempted before the workflow stops.
+
 ## Author
 
 **Konstantin Milonas & AI Copilot**
