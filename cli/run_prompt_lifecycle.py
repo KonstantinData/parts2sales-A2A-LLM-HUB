@@ -40,18 +40,51 @@ from utils.improvement_strategies import ImprovementStrategy
 DEFAULT_PASS_THRESHOLD = 0.85
 
 
-def load_pass_threshold() -> float:
-    """Load pass threshold from config/thresholds.yaml."""
+def load_threshold_config() -> tuple[dict, int]:
+    """Load all quality thresholds and max retries from config/thresholds.yaml."""
     config_path = Path("config/thresholds.yaml")
     try:
         with config_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        return float(data.get("prompt_quality", DEFAULT_PASS_THRESHOLD))
     except Exception:
-        return DEFAULT_PASS_THRESHOLD
+        data = {}
+
+    thresholds = {
+        k: float(v)
+        for k, v in data.items()
+        if k != "max_retries" and isinstance(v, (int, float, str))
+    }
+    if "prompt_quality" not in thresholds:
+        thresholds["prompt_quality"] = DEFAULT_PASS_THRESHOLD
+    max_retries = int(data.get("max_retries", 7))
+    return thresholds, max_retries
 
 
-PASS_THRESHOLD = load_pass_threshold()
+THRESHOLDS, MAX_RETRIES = load_threshold_config()
+
+
+def threshold_key_for_layer(layer: str) -> str:
+    mapping = {
+        "raw": "prompt_quality",
+        "template": "prompt_quality",
+        "feature_setup": "feature_quality",
+        "usecase_detect": "usecase_quality",
+        "industry_class": "industry_quality",
+        "company_assign": "company_quality",
+        "contact_assign": "contact_quality",
+    }
+    if layer not in mapping:
+        raise KeyError(f"No threshold mapping for layer '{layer}'")
+    return mapping[layer]
+
+
+def get_pass_threshold(layer: str) -> float:
+    key = threshold_key_for_layer(layer)
+    if key not in THRESHOLDS:
+        raise KeyError(
+            f"Threshold '{key}' not found in config/thresholds.yaml"
+        )
+    return THRESHOLDS[key]
 TARGET_VERSION = "v0.2.0"
 
 improvement_strategy_lookup = {
@@ -113,7 +146,9 @@ def evaluate_and_improve_prompt(
 
     matrix_type = ScoringMatrixType[matrix_key]
 
-    while iteration < 7:
+    pass_threshold = get_pass_threshold(layer_from_file)
+
+    while iteration < MAX_RETRIES:
         iteration += 1
         current_version = extract_version(current_path.name)
         print(
@@ -138,7 +173,7 @@ def evaluate_and_improve_prompt(
 
         weighted_score = pq_event.payload.get("weighted_score", 0.0)
 
-        if weighted_score >= PASS_THRESHOLD:
+        if weighted_score >= pass_threshold:
             print("✅ Prompt passed quality threshold.")
 
             target_name = current_path.name.replace("_raw_", "_template_").rsplit(
@@ -204,7 +239,7 @@ def evaluate_and_improve_prompt(
             )
             break
 
-        if iteration >= 7:
+        if iteration >= MAX_RETRIES:
             print("⛔️ Max iterations reached. Aborting.")
 
     try:
