@@ -3,8 +3,8 @@ import json
 
 def extract_json_array_from_response(response: str) -> list:
     """
-    Parses a JSON array or a JSON object containing an array under any standard key.
-    Robust against OpenAI response_format="json_object" outputs.
+    Parses a JSON array, an object with a top-level array,
+    or a dict of arrays (all lists will be concatenated).
     """
     if not isinstance(response, str):
         raise ValueError("LLM response is not a string.")
@@ -17,7 +17,7 @@ def extract_json_array_from_response(response: str) -> list:
     if isinstance(parsed, list):
         return parsed
     if isinstance(parsed, dict):
-        # Standard keys for arrays from all relevant tasks
+        # Known standard keys (features, companies, etc)
         preferred_keys = [
             "features",
             "companies",
@@ -32,4 +32,10 @@ def extract_json_array_from_response(response: str) -> list:
         for key in preferred_keys:
             if key in parsed and isinstance(parsed[key], list):
                 return parsed[key]
+        # Sonderfall: dict mit nur Listen als Werte
+        if all(isinstance(v, list) for v in parsed.values()) and len(parsed) > 0:
+            combined = []
+            for v in parsed.values():
+                combined.extend(v)
+            return combined
     raise ValueError("No valid array found in LLM response.")
