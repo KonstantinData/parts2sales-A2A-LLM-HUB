@@ -3,7 +3,7 @@
 """
 Company Match Agent
 
-Version: 2.1.0
+Version: 2.1.4
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -12,9 +12,9 @@ Logs all matchmaking events to workflow-centric JSONL log.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 import json
+import traceback
 
 from pydantic import BaseModel, ValidationError
 from utils.time_utils import cet_now
@@ -37,6 +37,7 @@ class CompanyMatchAgent:
     ):
         self.llm = openai_client
         self.log_dir = log_dir
+        self.workflow_id = None  # Wird dynamisch gesetzt in run()
 
     def run(
         self,
@@ -49,11 +50,11 @@ class CompanyMatchAgent:
     ):
         if workflow_id is None:
             workflow_id = f"company_{uuid4().hex[:6]}"
+        self.workflow_id = workflow_id
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
             industries_json = json.dumps(input_data, ensure_ascii=False, indent=2)
-
             companies_json = self.match_companies(industries_json, prompt_override)
             validated = CompaniesMatched(companies=companies_json)
 
@@ -67,7 +68,7 @@ class CompanyMatchAgent:
                 event_id=str(uuid4()),
                 event_type="company_match",
                 agent_name="CompanyMatchAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.3",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -84,13 +85,11 @@ class CompanyMatchAgent:
             return event
 
         except (ValidationError, Exception) as ex:
-            import traceback
-
             error_event = AgentEvent(
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CompanyMatchAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.3",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -111,12 +110,74 @@ class CompanyMatchAgent:
 
     def match_companies(self, industries_json: str, prompt_override: str | None = None):
         prompt = (
-            "Given the following JSON array of industry classes, suggest 3 to 7 example companies (real or plausible for the market) "
-            "as a JSON array of company names. Return only the JSON array, no explanations.\n\n"
+            "Given the following JSON array of industry classes, suggest 3 to 7 example companies "
+            "(real or plausible for the market) as a JSON array of company names. "
+            "Return only the JSON array, no explanations.\n\n"
             f"{industries_json}\n"
         )
         if prompt_override:
             prompt = prompt_override
-        response = self.llm.chat(prompt=prompt)
-        print("🧠 LLM Response (Company):\n", response)
-        return json.loads(response)
+
+        print("📤 Prompt sent to LLM:")
+        print(prompt)
+
+        response = ""  # Sicherstellen, dass response immer definiert ist
+
+        try:
+            response = self.llm.chat(prompt=prompt)
+            print("🧠 Raw LLM Response (Company):")
+            print(response)
+
+            # Sicherheitsprüfung: response muss ein nicht-leerer String sein
+            if not isinstance(response, str) or not response.strip():
+                raise ValueError(
+                    "LLM returned an invalid or empty response. Cannot parse as JSON."
+                )
+            print("🧠 Raw LLM Response (Company):")
+            print(response)
+
+            if not response or not response.strip():
+                raise ValueError(
+                    "LLM returned an empty response. Cannot parse as JSON."
+                )
+
+            result = json.loads(response)
+
+            if not isinstance(result, list):
+                raise ValueError(f"Expected a list, got: {type(result)} → {result}")
+            if not all(isinstance(item, str) for item in result):
+                raise ValueError(
+                    "Expected list of strings (company names). Got: " + str(result)
+                )
+
+            return result
+
+        except Exception as ex:
+            logger = JsonlEventLogger(
+                workflow_id=self.workflow_id, log_dir=self.log_dir
+            )
+            error_details = {
+                "exception": str(ex),
+                "traceback": traceback.format_exc(),
+                "prompt": prompt,
+                "response": response or "<no response>",
+            }
+            logger.log_event(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "error",
+                    "agent_name": "CompanyMatchAgent",
+                    "agent_version": "2.1.3",
+                    "timestamp": cet_now(),
+                    "step_id": "match_companies",
+                    "prompt_version": "enhanced_validation",
+                    "status": "error",
+                    "payload": error_details,
+                    "meta": {
+                        "context": "JSON parsing and validation",
+                    },
+                    "workflow_id": self.workflow_id,
+                    "source_event_id": None,
+                }
+            )
+            raise
