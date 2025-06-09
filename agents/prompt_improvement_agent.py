@@ -57,6 +57,12 @@ class PromptImprovementAgent:
 
             improved_prompt_text = response.strip()
 
+            # Ensure JSON output instruction is retained. Downstream agents
+            # expect strictly formatted JSON. If the improved prompt no longer
+            # references JSON, enforce it explicitly to avoid parsing errors.
+            if "json" not in improved_prompt_text.lower():
+                improved_prompt_text += "\nRespond only with valid JSON."
+
             # If the LLM answered with an apology or empty text, fall back to the
             # original prompt. This prevents downstream agents from receiving an
             # invalid prompt like "I'm sorry..." which would cause parsing errors.
