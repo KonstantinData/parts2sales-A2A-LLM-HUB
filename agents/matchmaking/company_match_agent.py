@@ -1,5 +1,3 @@
-# agents/matchmaking/company_match_agent.py
-
 """
 Company Match Agent
 
@@ -30,6 +28,15 @@ class CompaniesMatched(BaseModel):
     companies: list  # General output structure (company names or dicts)
 
 
+def flatten_for_llm(input_data):
+    """Falls input_data ein dict mit 'industries' o.ä. ist, nimm nur das relevante Array."""
+    if isinstance(input_data, dict):
+        for key in ["industries", "industry_classes", "sectors"]:
+            if key in input_data and isinstance(input_data[key], list):
+                return input_data[key]
+    return input_data
+
+
 class CompanyMatchAgent:
     def __init__(
         self,
@@ -55,7 +62,9 @@ class CompanyMatchAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            industries_json = json.dumps(input_data, ensure_ascii=False, indent=2)
+            industries_json = json.dumps(
+                flatten_for_llm(input_data), ensure_ascii=False, indent=2
+            )
             companies_json = self.match_companies(industries_json, prompt_override)
             validated = CompaniesMatched(companies=companies_json)
 
@@ -69,7 +78,7 @@ class CompanyMatchAgent:
                 event_id=str(uuid4()),
                 event_type="company_match",
                 agent_name="CompanyMatchAgent",
-                agent_version="2.1.3",
+                agent_version="2.1.4",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -90,7 +99,7 @@ class CompanyMatchAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CompanyMatchAgent",
-                agent_version="2.1.3",
+                agent_version="2.1.4",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -129,17 +138,11 @@ class CompanyMatchAgent:
             print("🧠 Raw LLM Response (Company):")
             print(response)
 
-            # Sicherheitsprüfung: response muss ein nicht-leerer String sein
-            if not isinstance(response, str) or not response.strip():
+            # Frühzeitig Klartext abfangen
+            first = response.lstrip()
+            if not first.startswith("[") and not first.startswith("{"):
                 raise ValueError(
-                    "LLM returned an invalid or empty response. Cannot parse as JSON."
-                )
-            print("🧠 Raw LLM Response (Company):")
-            print(response)
-
-            if not response or not response.strip():
-                raise ValueError(
-                    "LLM returned an empty response. Cannot parse as JSON."
+                    f"LLM response is not JSON but natural language: {first[:80]}"
                 )
 
             result = extract_json_array_from_response(response)
@@ -168,7 +171,7 @@ class CompanyMatchAgent:
                     "event_id": str(uuid4()),
                     "event_type": "error",
                     "agent_name": "CompanyMatchAgent",
-                    "agent_version": "2.1.3",
+                    "agent_version": "2.1.4",
                     "timestamp": cet_now(),
                     "step_id": "match_companies",
                     "prompt_version": "enhanced_validation",
