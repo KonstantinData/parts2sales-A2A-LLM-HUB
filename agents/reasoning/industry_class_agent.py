@@ -46,6 +46,7 @@ class IndustryClassAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        prompt_override: str | None = None,
     ):
         if workflow_id is None:
             workflow_id = f"industry_{uuid4().hex[:6]}"
@@ -54,7 +55,7 @@ class IndustryClassAgent:
         try:
             usecases_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-            industries_json = self.extract_industries(usecases_json)
+            industries_json = self.extract_industries(usecases_json, prompt_override)
             validated = IndustriesExtracted(industries=industries_json)
 
             payload = {
@@ -109,12 +110,14 @@ class IndustryClassAgent:
             logger.log_event(error_event)
             raise
 
-    def extract_industries(self, usecases_json: str):
+    def extract_industries(self, usecases_json: str, prompt_override: str | None = None):
         prompt = (
             "Given the following JSON array of use cases, assign and return relevant industry classes (e.g. NAICS, NACE, or text labels) "
             "as a JSON array of strings. Return only the JSON array, no explanations.\n\n"
             f"{usecases_json}\n"
         )
+        if prompt_override:
+            prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response (Industry):\n", response)
         return json.loads(response)

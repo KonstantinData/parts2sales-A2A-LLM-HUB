@@ -45,6 +45,7 @@ class FeatureExtractionAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        prompt_override: str | None = None,
     ):
         if workflow_id is None:
             workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
@@ -55,7 +56,7 @@ class FeatureExtractionAgent:
             input_content = json.dumps(input_data, ensure_ascii=False, indent=2)
 
             # --- LLM-based extraction
-            features_json = self.extract_features(input_content)
+            features_json = self.extract_features(input_content, prompt_override)
             validated = FeaturesExtracted(features=features_json)
 
             payload = {
@@ -110,12 +111,14 @@ class FeatureExtractionAgent:
             logger.log_event(error_event)
             raise
 
-    def extract_features(self, input_content: str):
+    def extract_features(self, input_content: str, prompt_override: str | None = None):
         prompt = (
             "Extract the most relevant product or business features from the following input JSON list.\n\n"
             f"{input_content}\n\n"
             "Return a JSON array of feature objects only (do not include any explanations)."
         )
+        if prompt_override:
+            prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response:\n", response)
         # Try to parse as JSON list, or raise error

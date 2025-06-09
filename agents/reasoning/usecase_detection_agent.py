@@ -46,6 +46,7 @@ class UsecaseDetectionAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        prompt_override: str | None = None,
     ):
         if workflow_id is None:
             workflow_id = f"usecase_{uuid4().hex[:6]}"
@@ -55,7 +56,7 @@ class UsecaseDetectionAgent:
             # Prepare JSON string for LLM
             features_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-            usecases_json = self.extract_usecases(features_json)
+            usecases_json = self.extract_usecases(features_json, prompt_override)
             validated = UsecasesExtracted(usecases=usecases_json)
 
             payload = {
@@ -110,13 +111,15 @@ class UsecaseDetectionAgent:
             logger.log_event(error_event)
             raise
 
-    def extract_usecases(self, features_json: str):
+    def extract_usecases(self, features_json: str, prompt_override: str | None = None):
         prompt = (
             "Given the following extracted product features as JSON, "
             "infer and return 3 to 7 plausible usage domains (application environments, use cases) as a JSON array of strings. "
             "Do not include explanations, only the JSON list.\n\n"
             f"{features_json}\n"
         )
+        if prompt_override:
+            prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response (Usecase):\n", response)
         return json.loads(response)
