@@ -15,6 +15,8 @@ The system orchestrates autonomous LLM agents for evaluation, improvement, valid
 - **Event Logging & Audit Trail:** Every action, score, or improvement is logged as an AgentEvent in JSON with timestamp and version.
 - **Archiving:** Automatic archiving of prompts after every stage transition.
 - **.env Config:** No secrets in code, all via OS environment variables.
+- **Robust JSON Parsing:** Bullet and numbered list prefixes are stripped before
+  parsing, so malformed LLM responses are handled gracefully.
 
 ## Agent Overview
 

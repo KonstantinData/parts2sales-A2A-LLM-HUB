@@ -11,3 +11,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   provide clearer errors when no array is present.
 - Update company_match_agent to parse LLM output with
   `extract_json_array_from_response`, preventing JSONDecodeError on noisy replies.
+- `extract_json_array_from_response` now strips leading bullets and numbering
+  before parsing, improving robustness against malformed lists.
