@@ -22,6 +22,7 @@ from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
+from utils.json_safety import extract_json_array_from_response
 
 
 class IndustriesExtracted(BaseModel):
@@ -120,4 +121,4 @@ class IndustryClassAgent:
             prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response (Industry):\n", response)
-        return json.loads(response)
+        return extract_json_array_from_response(response)
