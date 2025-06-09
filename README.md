@@ -54,7 +54,7 @@ graph LR
 
 **Process (simplified):**
 
-1. CLI runner (`run_prompt_lifecycle.py`) ingests a RAW prompt.
+1. CLI runner (`run_orchestration.py`) ingests a RAW prompt.
 2. Quality check + scoring (via relevant matrix).
 3. Loop: Improve/re-evaluate until threshold is met.
 4. Controller releases, archives RAW, creates template.
@@ -65,10 +65,8 @@ graph LR
 
 ```plaintext
 ├── agents/
-│   ├── base_agent.py
 │   ├── prompt_quality_agent.py
 │   ├── prompt_improvement_agent.py
-│   ├── controller_agent.py
 │   ├── extract/feature_extraction_agent.py
 │   ├── matchmaking/company_match_agent.py
 │   ├── matchmaking/contact_match_agent.py
@@ -76,22 +74,17 @@ graph LR
 │   ├── reasoning/usecase_detection_agent.py
 │   ├── reasoning/industry_class_agent.py
 │   └── ops/cost_monitor_agent.py
+├── controller/
+│   └── agent_orchestrator.py
 ├── cli/
-│   └── run_prompt_lifecycle.py
+│   └── run_orchestration.py
 ├── config/
-│   └── scoring/
-│       ├── raw_scoring_matrix.py
-│       ├── template_scoring_matrix.py
-│       ├── feature_scoring_matrix.py
-│       ├── usecase_scoring_matrix.py
-│       ├── industry_scoring_matrix.py
-│       ├── company_scoring_matrix.py
-│       └── contact_scoring_matrix.py
+│   ├── max_retries.yaml
+│   └── templates/quality_review_log_template.json
 ├── utils/
-│   ├── event_logger.py
-│   ├── scoring_matrix_types.py
-│   ├── semantic_versioning_utils.py
-│   └── schema.py
+│   ├── jsonl_event_logger.py
+│   ├── prompt_versioning.py
+│   └── openai_client.py
 ├── prompts/
 │   ├── 00-raw/
 │   ├── 01-templates/
@@ -123,38 +116,22 @@ pip install -r requirements.txt  # installs python-dotenv
 # Create .env and insert your keys
 
 # RAW → TEMPLATE → RESEARCH → PRODUCTION
-python cli/run_prompt_lifecycle.py --all
+python cli/run_orchestration.py --all
 # ...or for a single file:
-python cli/run_prompt_lifecycle.py --file prompts/00-raw/feature_determination.yaml
+python cli/run_orchestration.py --file prompts/00-raw/feature_determination.yaml
 ```
 
 ## Advanced
 
-- **Scoring Matrix:** Use via Enum `ScoringMatrixType` (in `utils/scoring_matrix_types.py`), type-checked, customizable per agent.
  - **LLM-based scoring:** The quality agent sends each criterion to OpenAI and interprets the reply as pass or fail for that criterion.
  - If the OpenAI API is unavailable, scoring fails and an error event is logged.
 - **Archiving:** Prompts are moved after each status change to `prompts/99-archive/` (with timestamp, stage, version).
 - **Test & CI:** All core functions have unit tests, integration tests for the agent pipeline (pytest-ready).
+### Configuration
 
-### Threshold Configuration
+The number of improvement iterations is defined in `config/max_retries.yaml`.
+`run_orchestration.py` reads this value to determine when to stop looping.
 
-The quality thresholds for each scoring layer and the maximum number of
-improvement cycles are defined in `config/thresholds.yaml`.
-
-```yaml
-prompt_quality: 0.90
-feature_quality: 0.90
-usecase_quality: 0.90
-industry_quality: 0.90
-company_quality: 0.90
-# contact_quality: 0.90  # optional
-max_retries: 7
-```
-
-`run_prompt_lifecycle.py` determines the layer from the prompt filename and
-loads the matching threshold value. If a key is missing, execution aborts with a
-clear error message. The `max_retries` value controls how many improvement
-iterations are attempted before the workflow stops.
 
 ## Author
 
