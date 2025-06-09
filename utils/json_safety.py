@@ -4,15 +4,25 @@ import json
 import re
 
 
+_LINE_PREFIX_RE = re.compile(r"^\s*(?:-\s*|\d+\.\s*)", re.MULTILINE)
+
+
+def _strip_bullet_prefixes(text: str) -> str:
+    """Remove leading bullet or numbering prefixes from each line."""
+    return _LINE_PREFIX_RE.sub("", text)
+
+
 def extract_json_array_from_response(response: str) -> list:
     """
     Extracts a JSON array from an LLM response string by identifying the first array block.
-    Strips any surrounding text or explanations. Raises an error if extraction fails.
+    Strips any surrounding text or explanations. Lines starting with common list
+    prefixes like ``-`` or ``1.`` are removed prior to parsing. Raises an error if
+    extraction fails.
     """
     if not isinstance(response, str):
         raise ValueError("LLM response is not a string.")
 
-    cleaned = response.strip()
+    cleaned = _strip_bullet_prefixes(response.strip())
     if not cleaned:
         raise ValueError("LLM response is empty.")
 
