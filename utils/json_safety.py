@@ -1,6 +1,7 @@
 # utils/json_safety.py
 
 import json
+import re
 
 
 def extract_json_array_from_response(response: str) -> list:
@@ -15,20 +16,28 @@ def extract_json_array_from_response(response: str) -> list:
     if not cleaned:
         raise ValueError("LLM response is empty.")
 
-    start = cleaned.find("[")
-    end = cleaned.rfind("]")
-
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError("No JSON array found in the response.")
-
-    json_snippet = cleaned[start : end + 1]
-
-    try:
-        parsed = json.loads(json_snippet)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Could not decode extracted JSON array: {e}")
-
-    if not isinstance(parsed, list):
+    # Try to find the first JSON array in the string using regex.
+    array_match = re.search(r"\[[\s\S]*?\]", cleaned)
+    if array_match:
+        json_snippet = array_match.group(0)
+        try:
+            parsed = json.loads(json_snippet)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Could not decode extracted JSON array: {e}")
+        if isinstance(parsed, list):
+            return parsed
         raise ValueError("Parsed content is not a JSON list.")
 
-    return parsed
+    # Fallback: try to parse entire response as JSON and extract the first list.
+    try:
+        obj = json.loads(cleaned)
+        if isinstance(obj, list):
+            return obj
+        if isinstance(obj, dict):
+            for value in obj.values():
+                if isinstance(value, list):
+                    return value
+    except json.JSONDecodeError:
+        pass
+
+    raise ValueError(f"No JSON array found in the response. Start: {cleaned[:80]}")
