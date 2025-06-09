@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import argparse
 from uuid import uuid4
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -15,19 +16,18 @@ from utils.pdf_report_generator import generate_pdf_report
 def main():
     parser = argparse.ArgumentParser(description="Agent Orchestration Runner")
     parser.add_argument(
-        "--sample_file", required=True, help="Path to sample input file (e.g. JSON)"
-    )
-    parser.add_argument("--base_name", required=True, help="Base prompt name")
-    parser.add_argument("--iteration", type=int, default=1, help="Iteration index")
-    parser.add_argument(
-        "--log_dir", default="logs/workflows", help="Workflow log storage directory"
+        "--sample_file",
+        default="data/sample/mini_stock_list.json",
+        help="Path to sample input file (e.g. JSON)",
     )
     args = parser.parse_args()
 
     sample_file = Path(args.sample_file)
-    base_name = args.base_name
-    iteration = args.iteration
-    log_dir = Path(args.log_dir)
+    with open("config/max_retries.yaml", "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    iteration = cfg.get("max_retries", 1)
+    base_name = "feature_setup_template_v0.2.0"
+    log_dir = Path("logs/workflows")
     workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
     log_path = log_dir / f"{workflow_id}.jsonl"
 

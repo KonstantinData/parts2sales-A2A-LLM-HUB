@@ -45,6 +45,7 @@ class CompanyMatchAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        prompt_override: str | None = None,
     ):
         if workflow_id is None:
             workflow_id = f"company_{uuid4().hex[:6]}"
@@ -53,7 +54,7 @@ class CompanyMatchAgent:
         try:
             industries_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-            companies_json = self.match_companies(industries_json)
+            companies_json = self.match_companies(industries_json, prompt_override)
             validated = CompaniesMatched(companies=companies_json)
 
             payload = {
@@ -108,12 +109,14 @@ class CompanyMatchAgent:
             logger.log_event(error_event)
             raise
 
-    def match_companies(self, industries_json: str):
+    def match_companies(self, industries_json: str, prompt_override: str | None = None):
         prompt = (
             "Given the following JSON array of industry classes, suggest 3 to 7 example companies (real or plausible for the market) "
             "as a JSON array of company names. Return only the JSON array, no explanations.\n\n"
             f"{industries_json}\n"
         )
+        if prompt_override:
+            prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response (Company):\n", response)
         return json.loads(response)
