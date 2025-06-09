@@ -57,6 +57,20 @@ class PromptImprovementAgent:
 
             improved_prompt_text = response.strip()
 
+            # If the LLM answered with an apology or empty text, fall back to the
+            # original prompt. This prevents downstream agents from receiving an
+            # invalid prompt like "I'm sorry..." which would cause parsing errors.
+            apology_phrases = (
+                "i'm sorry",
+                "i am sorry",
+                "sorry",
+                "es tut mir leid",
+            )
+            if not improved_prompt_text or improved_prompt_text.lower().startswith(apology_phrases):
+                original_prompt = input_data.get("original_prompt", "")
+                if original_prompt:
+                    improved_prompt_text = original_prompt
+
             payload = {
                 "improved_prompt": improved_prompt_text,
                 "input_data": input_data,
