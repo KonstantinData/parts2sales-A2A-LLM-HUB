@@ -3,7 +3,7 @@
 """
 Feature Extraction Agent
 
-Version: 2.1.0
+Version: 2.1.1
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -27,6 +27,21 @@ class FeaturesExtracted(BaseModel):
     """Output schema for features extracted by the agent."""
 
     features: list  # Accept any list structure for generalization
+
+    @classmethod
+    def from_llm_response(cls, response):
+        # Robust: Accept either a list or an object with "features" key containing a list
+        if isinstance(response, list):
+            return cls(features=response)
+        if (
+            isinstance(response, dict)
+            and "features" in response
+            and isinstance(response["features"], list)
+        ):
+            return cls(features=response["features"])
+        raise ValueError(
+            "LLM response must be a list or an object with a 'features' key containing a list."
+        )
 
 
 class FeatureExtractionAgent:
@@ -57,7 +72,7 @@ class FeatureExtractionAgent:
 
             # --- LLM-based extraction
             features_json = self.extract_features(input_content, prompt_override)
-            validated = FeaturesExtracted(features=features_json)
+            validated = FeaturesExtracted.from_llm_response(features_json)
 
             payload = {
                 "input": input_data,
@@ -69,7 +84,7 @@ class FeatureExtractionAgent:
                 event_id=str(uuid4()),
                 event_type="feature_extraction",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -92,7 +107,7 @@ class FeatureExtractionAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -121,5 +136,5 @@ class FeatureExtractionAgent:
             prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response:\n", response)
-        # Try to parse as JSON list, or raise error
+        # Try to parse as JSON list or object with "features" key
         return json.loads(response)

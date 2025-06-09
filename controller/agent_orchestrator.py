@@ -4,10 +4,12 @@
 Agent Orchestrator for 01-template pipeline processing with sequential agent calls,
 versioning, feedback loops, and staged environment promotion.
 """
+
 import sys
 from pathlib import Path
-
 import json
+import yaml
+
 from utils.openai_client import OpenAIClient
 from agents.extract.feature_extraction_agent import FeatureExtractionAgent
 from agents.reasoning.usecase_detection_agent import UsecaseDetectionAgent
@@ -16,14 +18,20 @@ from agents.matchmaking.company_match_agent import CompanyMatchAgent
 from agents.prompt_quality_agent import PromptQualityAgent
 from agents.prompt_improvement_agent import PromptImprovementAgent
 from utils.jsonl_event_logger import JsonlEventLogger
-import yaml
 
 
 class AgentOrchestrator:
-    def __init__(self, workflow_id: str, sample_file: Path, log_dir: Path):
+    def __init__(
+        self,
+        workflow_id: str,
+        sample_file: Path,
+        log_dir: Path,
+        prompt_dir: Path = Path("prompts/01-template"),
+    ):
         self.workflow_id = workflow_id
         self.sample_file = sample_file
         self.log_dir = log_dir
+        self.prompt_dir = prompt_dir  # NEU: Prompt-Ausgangspfad merken
         self.openai_client = OpenAIClient()
 
         with open("config/max_retries.yaml", "r", encoding="utf-8") as f:
@@ -69,6 +77,7 @@ class AgentOrchestrator:
             iteration=iteration,
             workflow_id=self.workflow_id,
             parent_event_id=parent_event_id,
+            # Prompt-Pfad wird aktuell hier nicht weitergegeben – optional anpassen, falls Agenten dies benötigen
         )
 
         retries = 0

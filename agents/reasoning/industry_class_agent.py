@@ -3,7 +3,7 @@
 """
 Industry Classification Agent
 
-Version: 2.1.0
+Version: 2.1.1
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -30,6 +30,19 @@ class IndustriesExtracted(BaseModel):
 
     industries: list  # Generalized output for industry labels/classes
 
+    @classmethod
+    def from_llm_response(cls, response):
+        if isinstance(response, list):
+            return cls(industries=response)
+        if isinstance(response, dict):
+            # Akzeptiere auch keys wie "industries", "industry_classes", "labels"
+            for key in ("industries", "industry_classes", "labels"):
+                if key in response and isinstance(response[key], list):
+                    return cls(industries=response[key])
+        raise ValueError(
+            "LLM response must be a list or an object with a key containing a list of industries."
+        )
+
 
 class IndustryClassAgent:
     def __init__(
@@ -55,9 +68,8 @@ class IndustryClassAgent:
 
         try:
             usecases_json = json.dumps(input_data, ensure_ascii=False, indent=2)
-
             industries_json = self.extract_industries(usecases_json, prompt_override)
-            validated = IndustriesExtracted(industries=industries_json)
+            validated = IndustriesExtracted.from_llm_response(industries_json)
 
             payload = {
                 "input": input_data,
@@ -69,7 +81,7 @@ class IndustryClassAgent:
                 event_id=str(uuid4()),
                 event_type="industry_classification",
                 agent_name="IndustryClassAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="industry_classification",
                 prompt_version=base_name,
@@ -92,7 +104,7 @@ class IndustryClassAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="IndustryClassAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="industry_classification",
                 prompt_version=base_name,
@@ -111,7 +123,9 @@ class IndustryClassAgent:
             logger.log_event(error_event)
             raise
 
-    def extract_industries(self, usecases_json: str, prompt_override: str | None = None):
+    def extract_industries(
+        self, usecases_json: str, prompt_override: str | None = None
+    ):
         prompt = (
             "Given the following JSON array of use cases, assign and return relevant industry classes (e.g. NAICS, NACE, or text labels) "
             "as a JSON array of strings. Return only the JSON array, no explanations.\n\n"
@@ -121,4 +135,4 @@ class IndustryClassAgent:
             prompt = prompt_override
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response (Industry):\n", response)
-        return extract_json_array_from_response(response)
+        return json.loads(response)

@@ -3,7 +3,7 @@
 """
 Usecase Detection Agent
 
-Version: 2.1.0
+Version: 2.1.1
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -28,6 +28,19 @@ class UsecasesExtracted(BaseModel):
     """Schema for output of usecase detection."""
 
     usecases: list  # Generalized output for usecases
+
+    @classmethod
+    def from_llm_response(cls, response):
+        if isinstance(response, list):
+            return cls(usecases=response)
+        if isinstance(response, dict):
+            # akzeptiere auch usage_domains oder usecases als Schlüssel
+            for key in ("usage_domains", "usecases"):
+                if key in response and isinstance(response[key], list):
+                    return cls(usecases=response[key])
+        raise ValueError(
+            "LLM response must be a list or an object with 'usecases' or 'usage_domains' key containing a list."
+        )
 
 
 class UsecaseDetectionAgent:
@@ -55,9 +68,8 @@ class UsecaseDetectionAgent:
         try:
             # Prepare JSON string for LLM
             features_json = json.dumps(input_data, ensure_ascii=False, indent=2)
-
             usecases_json = self.extract_usecases(features_json, prompt_override)
-            validated = UsecasesExtracted(usecases=usecases_json)
+            validated = UsecasesExtracted.from_llm_response(usecases_json)
 
             payload = {
                 "input": input_data,
@@ -69,7 +81,7 @@ class UsecaseDetectionAgent:
                 event_id=str(uuid4()),
                 event_type="usecase_detection",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,
@@ -92,7 +104,7 @@ class UsecaseDetectionAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="2.1.0",
+                agent_version="2.1.1",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,

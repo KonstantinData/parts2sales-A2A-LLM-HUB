@@ -31,11 +31,15 @@ def main():
     workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
     log_path = log_dir / f"{workflow_id}.jsonl"
 
-    # Orchestrator ausführen
+    # Setze den Prompt-Ausgangspfad explizit auf 01-template
+    prompt_dir = Path("prompts/01-template")
+
+    # Orchestrator ausführen, Prompt-Pfad explizit übergeben
     orchestrator = AgentOrchestrator(
         workflow_id=workflow_id,
         sample_file=sample_file,
         log_dir=log_dir,
+        prompt_dir=prompt_dir,  # <--- NEU
     )
     final_event = orchestrator.run(
         base_name=base_name,
