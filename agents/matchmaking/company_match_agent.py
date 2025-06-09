@@ -1,73 +1,72 @@
+# agents/matchmaking/company_match_agent.py
+
 """
-company_match_agent.py
+Company Match Agent
 
-Purpose : Matches companies based on input using LLM or custom logic.
-Logging : All events (success and error) are appended to a workflow-centric JSONL log via JsonlEventLogger.
+Version: 2.1.0
+Author: Konstantin Milonas with Agentic AI Copilot support
 
-Author  : Konstantin Milonas with support from AI Copilot
-
-# Notes:
-# - Every company matching run (success/error) is logged as an AgentEvent in the workflow log.
-# - No legacy or scattered output files, only clean JSONL logs per workflow/session.
-# - Ready for scalable and auditable production use.
+Purpose:
+Matches extracted industries or usecases to best-fit companies from a reference set or via LLM.
+Logs all matchmaking events to workflow-centric JSONL log.
 """
 
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+import json
 
-from utils.time_utils import cet_now, timestamp_for_filename
-
+from pydantic import BaseModel, ValidationError
+from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
 
 
+class CompaniesMatched(BaseModel):
+    """Schema for company match output."""
+
+    companies: list  # General output structure (company names or dicts)
+
+
 class CompanyMatchAgent:
     def __init__(
         self,
-        match_strategy,
         openai_client: OpenAIClient,
         log_dir=Path("logs/workflows"),
     ):
-        """
-        match_strategy: logic or type for company matching (e.g., 'LLM', 'rules', etc.)
-        openai_client: injected OpenAIClient instance
-        log_dir: workflow log storage (default: logs/workflows)
-        """
-        self.match_strategy = match_strategy
         self.llm = openai_client
         self.log_dir = log_dir
 
     def run(
-        self, input_path: Path, base_name: str, iteration: int, workflow_id: str = None
+        self,
+        input_data: list,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        parent_event_id: str = None,
     ):
-        """
-        Performs company matching on the given input.
-        All events are logged to the workflow JSONL log.
-        """
         if workflow_id is None:
-            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"company_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Read input data
-            with open(input_path, "r", encoding="utf-8") as f:
-                input_content = f.read()
+            industries_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-            # --- Match companies (customize this logic as needed)
-            matched_companies = self.match_companies(input_content)
+            companies_json = self.match_companies(industries_json)
+            validated = CompaniesMatched(companies=companies_json)
 
             payload = {
-                "input": input_content,
-                "matched_companies": matched_companies,
+                "input": input_data,
+                "companies": validated.companies,
                 "feedback": "",
             }
 
             event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="company_match",
                 agent_name="CompanyMatchAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -75,19 +74,22 @@ class CompanyMatchAgent:
                 payload=payload,
                 meta={
                     "iteration": iteration,
-                    "match_strategy": str(self.match_strategy),
+                    "matching_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(event)
             return event
 
-        except Exception as ex:
+        except (ValidationError, Exception) as ex:
             import traceback
 
             error_event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CompanyMatchAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="company_match",
                 prompt_version=base_name,
@@ -98,18 +100,20 @@ class CompanyMatchAgent:
                 },
                 meta={
                     "iteration": iteration,
-                    "match_strategy": str(self.match_strategy),
+                    "matching_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(error_event)
             raise
 
-    def match_companies(self, input_content):
-        """
-        Your company matching logic here.
-        For now, returns a dummy example. Replace with your real matching logic!
-        """
-        # Example: use LLM, database, or fuzzy matching
-        # companies = self.llm.match_companies(input_content)
-        # return companies
-        return ["example_company"]  # Placeholder
+    def match_companies(self, industries_json: str):
+        prompt = (
+            "Given the following JSON array of industry classes, suggest 3 to 7 example companies (real or plausible for the market) "
+            "as a JSON array of company names. Return only the JSON array, no explanations.\n\n"
+            f"{industries_json}\n"
+        )
+        response = self.llm.chat(prompt=prompt)
+        print("🧠 LLM Response (Company):\n", response)
+        return json.loads(response)

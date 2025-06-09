@@ -1,6 +1,14 @@
+"""
+utils/pdf_report_generator.py
+
+Purpose : Generates a PDF workflow report from JSONL event logs using Jinja2 and WeasyPrint.
+Version : 2.0.0
+Author  : Konstantin Milonas with Agentic AI Copilot support
+"""
+
 from pathlib import Path
-import json
 from typing import Iterable, Dict, Any
+import json
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML

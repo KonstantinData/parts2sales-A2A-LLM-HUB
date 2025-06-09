@@ -1,28 +1,48 @@
 # agents/manifest.yaml
 
 FeatureExtractionAgent:
-  version: 2.0.0
-  input_format: prompt
-  output_format: json
+  version: 2.1.0
+  input_format: json
+  output_format: feature_list
   dependencies: []
 
-PromptQualityAgent:
-  version: 2.0.0
-  input_format: json
-  output_format: evaluation
+UsecaseDetectionAgent:
+  version: 2.1.0
+  input_format: feature_list
+  output_format: usecase_list
   dependencies:
     - FeatureExtractionAgent
 
-ControllerAgent:
-  version: 2.0.0
-  input_format: prompt
-  output_format: summary
+IndustryClassAgent:
+  version: 2.1.0
+  input_format: usecase_list
+  output_format: industry_list
   dependencies:
-    - FeatureExtractionAgent
-    - PromptQualityAgent
+    - UsecaseDetectionAgent
+
+CompanyMatchAgent:
+  version: 2.1.0
+  input_format: industry_list
+  output_format: company_list
+  dependencies:
+    - IndustryClassAgent
+
+ContactMatchAgent:
+  version: 2.1.0
+  input_format: company_list
+  output_format: contact_list
+  dependencies:
+    - CompanyMatchAgent
+
+CRMSyncAgent:
+  version: 2.1.0
+  input_format: contact_list
+  output_format: sync_status
+  dependencies:
+    - ContactMatchAgent
 
 CostMonitorAgent:
-  version: 1.0.0
+  version: 2.1.0
   input_format: any
-  output_format: usage_log
+  output_format: cost_log
   dependencies: []

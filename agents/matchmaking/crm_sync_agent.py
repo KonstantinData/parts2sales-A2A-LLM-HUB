@@ -1,61 +1,74 @@
+# agents/matchmaking/crm_sync_agent.py
+
 """
-crm_sync_agent.py
+CRM Sync Agent
 
-Purpose : Synchronizes data with CRM systems based on input and agent logic.
-Logging : All events (success and error) are appended to a workflow-centric JSONL log via JsonlEventLogger.
+Version: 2.1.0
+Author: Konstantin Milonas with Agentic AI Copilot support
 
-Author  : Konstantin Milonas with support from AI Copilot
-
-# Notes:
-# - Every CRM sync run (success/error) is logged as an AgentEvent in the workflow log.
-# - No scattered or legacy output files, only clean JSONL logs per workflow/session.
-# - Designed for scalable, compliant, and auditable production integration.
+Purpose:
+Simulates syncing of matched contacts into a CRM system.
+Logs all sync events to the workflow-centric JSONL log.
 """
 
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+import json
 
-from utils.time_utils import cet_now, timestamp_for_filename
-
+from pydantic import BaseModel, ValidationError
+from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
+from utils.openai_client import OpenAIClient
+
+
+class CRMSyncResult(BaseModel):
+    """Schema for CRM sync operation result."""
+
+    synced_contacts: list
+    sync_status: str
 
 
 class CRMSyncAgent:
-    def __init__(self, sync_strategy, crm_client, log_dir=Path("logs/workflows")):
-        """
-        sync_strategy: logic/type for CRM sync (e.g., 'push', 'merge', 'update')
-        crm_client: injected CRM API client or handler
-        log_dir: workflow log storage (default: logs/workflows)
-        """
-        self.sync_strategy = sync_strategy
-        self.crm_client = crm_client
+    def __init__(
+        self,
+        openai_client: OpenAIClient,
+        log_dir=Path("logs/workflows"),
+    ):
+        self.llm = openai_client
         self.log_dir = log_dir
 
-    def run(self, input_data, base_name: str, iteration: int, workflow_id: str = None):
-        """
-        Performs CRM sync operation on the given input.
-        All events are logged to the workflow JSONL log.
-        """
+    def run(
+        self,
+        input_data: list,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        parent_event_id: str = None,
+    ):
         if workflow_id is None:
-            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"crm_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Sync with CRM (replace with your actual logic)
-            sync_result = self.sync_with_crm(input_data)
+            contacts_json = json.dumps(input_data, ensure_ascii=False, indent=2)
+
+            result = self.sync_contacts(contacts_json)
+            validated = CRMSyncResult(**result)
 
             payload = {
-                "input_data": input_data,
-                "sync_result": sync_result,
+                "input": input_data,
+                "synced_contacts": validated.synced_contacts,
+                "sync_status": validated.sync_status,
                 "feedback": "",
             }
 
             event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="crm_sync",
                 agent_name="CRMSyncAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="crm_sync",
                 prompt_version=base_name,
@@ -63,19 +76,22 @@ class CRMSyncAgent:
                 payload=payload,
                 meta={
                     "iteration": iteration,
-                    "sync_strategy": str(self.sync_strategy),
+                    "sync_strategy": "simulated",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(event)
             return event
 
-        except Exception as ex:
+        except (ValidationError, Exception) as ex:
             import traceback
 
             error_event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CRMSyncAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="crm_sync",
                 prompt_version=base_name,
@@ -86,16 +102,24 @@ class CRMSyncAgent:
                 },
                 meta={
                     "iteration": iteration,
-                    "sync_strategy": str(self.sync_strategy),
+                    "sync_strategy": "simulated",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(error_event)
             raise
 
-    def sync_with_crm(self, input_data):
-        """
-        Your CRM sync logic goes here.
-        For now, returns a dummy result. Replace with your real CRM sync logic!
-        """
-        # Example: self.crm_client.push_data(input_data)
-        return {"status": "success"}  # Placeholder
+    def sync_contacts(self, contacts_json: str):
+        # Simulate CRM sync – in real use, integrate CRM API here.
+        try:
+            contacts = json.loads(contacts_json)
+            return {
+                "synced_contacts": contacts,
+                "sync_status": "success",
+            }
+        except Exception:
+            return {
+                "synced_contacts": [],
+                "sync_status": "failed",
+            }

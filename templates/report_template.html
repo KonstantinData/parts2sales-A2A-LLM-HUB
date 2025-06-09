@@ -3,35 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    h1, h2 { color: #333; }
-    pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; }
+    body { font-family: Arial, sans-serif; padding: 24px; }
+    h1, h2, h3 { color: #222; }
+    .block { margin-bottom: 40px; }
+    .section { margin-bottom: 12px; }
+    pre, code { background: #f3f3f3; padding: 10px; border-radius: 4px; font-size: 13px;}
+    .payload-label { font-weight: bold; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <h1>Prompt Quality Report</h1>
+  <h1>Agentic Workflow Report</h1>
   {% for entry in entries %}
-    <h2>{{ entry.event_type }} – {{ entry.agent_name }} (v{{ entry.agent_version }})</h2>
-    <p><strong>Zeitstempel:</strong> {{ entry.timestamp }}</p>
-    <p><strong>Status:</strong> {{ entry.status }}</p>
+    <div class="block">
+      <h2>Step: {{ entry.step_id }}<br>
+        Agent: {{ entry.agent_name }} (v{{ entry.agent_version }})</h2>
+      <div class="section"><b>Status:</b> {{ entry.status }} | <b>Zeitstempel:</b> {{ entry.timestamp }}</div>
+      <div class="section"><b>Iteration:</b> {{ entry.meta.iteration if entry.meta and 'iteration' in entry.meta else '-' }}</div>
+      <div class="section"><b>Parent Event:</b> {{ entry.source_event_id if entry.source_event_id else '-' }}</div>
 
-    {% if entry.payload.criteria_scores %}
-      <h3>Bewertungskriterien</h3>
-      <ul>
-      {% for key, value in entry.payload.criteria_scores.items() %}
-        <li>{{ key }}: {{ value }}</li>
-      {% endfor %}
-      </ul>
-    {% endif %}
+      {# 1. Input extrahieren (tiefste Input-Ebene) #}
+      <div class="section payload-label">Input:</div>
+      <pre>
+{% set payload = entry.payload %}
+{% set input_obj = payload.input if payload and 'input' in payload else '-' %}
+{{ input_obj | tojson(indent=2) }}
+      </pre>
 
-    {% if entry.payload.detailed_feedback %}
-      <h3>Detailliertes Feedback</h3>
-      {% for item in entry.payload.detailed_feedback %}
-        <p><strong>Position:</strong></p>
-        <pre>{{ item.position }}</pre>
-        <p><strong>Feedback:</strong><br>{{ item.feedback }}</p>
-      {% endfor %}
-    {% endif %}
+      {# 2. Output extrahieren, je nach Agent #}
+      {% if payload.features_extracted %}
+        <div class="section payload-label">Output (features_extracted):</div>
+        <pre>{{ payload.features_extracted | tojson(indent=2) }}</pre>
+      {% elif payload.usecases %}
+        <div class="section payload-label">Output (usecases):</div>
+        <pre>{{ payload.usecases | tojson(indent=2) }}</pre>
+      {% elif payload.industries %}
+        <div class="section payload-label">Output (industries):</div>
+        <pre>{{ payload.industries | tojson(indent=2) }}</pre>
+      {% elif payload.companies %}
+        <div class="section payload-label">Output (companies):</div>
+        <pre>{{ payload.companies | tojson(indent=2) }}</pre>
+      {% else %}
+        <div class="section payload-label">Output:</div>
+        <pre>-</pre>
+      {% endif %}
+
+      <div class="section payload-label">Feedback:</div>
+      <pre>{{ payload.feedback if payload and 'feedback' in payload and payload.feedback else '-' }}</pre>
+
+      <div class="section payload-label">Meta:</div>
+      <pre>{{ entry.meta | tojson(indent=2) }}</pre>
+    </div>
     <hr>
   {% endfor %}
 </body>

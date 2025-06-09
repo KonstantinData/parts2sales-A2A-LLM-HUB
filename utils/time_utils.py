@@ -1,23 +1,19 @@
 """
-Time Utilities
+utils/time_utils.py
 
-Version: 2.0.0
-Author: Konstantin Milonas with Agentic AI Copilot support
-
-Purpose:
-Provides timezone-aware timestamps for event logging and filenames.
-Standardized for CET and ISO format usage across all agents and logs.
+Purpose : Utility functions for timezone-aware timestamps and filenames.
+Version : 2.0.0
+Author  : Konstantin Milonas with Agentic AI Copilot support
 """
 
 from datetime import datetime, timezone, timedelta
 
 
-def cet_now() -> str:
-    cet_offset = timedelta(
-        hours=2
-    )  # adjust for CET/CEST manually if DST logic not included
-    return (datetime.utcnow().replace(tzinfo=timezone.utc) + cet_offset).isoformat()
+def cet_now():
+    """Return current time in CET (Central European Time) with timezone info."""
+    return datetime.now(timezone(timedelta(hours=1), name="CET"))
 
 
-def timestamp_for_filename() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+def timestamp_for_filename():
+    """Return a safe string timestamp for filenames (YYYY-MM-DDTHH-MM-SS)."""
+    return cet_now().strftime("%Y-%m-%dT%H-%M-%S")

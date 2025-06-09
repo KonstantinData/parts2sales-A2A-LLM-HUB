@@ -1,73 +1,74 @@
+# agents/reasoning/usecase_detection_agent.py
+
 """
-usecase_detection_agent.py
+Usecase Detection Agent
 
-Purpose : Detects relevant use cases from input using LLM or predefined logic.
-Logging : All events (success and error) are appended to a workflow-centric JSONL log via JsonlEventLogger.
+Version: 2.1.0
+Author: Konstantin Milonas with Agentic AI Copilot support
 
-Author  : Konstantin Milonas with support from AI Copilot
-
-# Notes:
-# - Every use case detection run (success/error) is logged as an AgentEvent in the workflow log.
-# - No scattered output files, only clean JSONL logging per workflow/session.
-# - Ensures full traceability and easy scaling/monitoring.
+Purpose:
+Infers plausible usage domains for products based on structured features.
+Uses LLM for semantic mapping of features to use cases.
+Logs all detections to the workflow-centric JSONL log.
 """
 
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+import json
 
-from utils.time_utils import cet_now, timestamp_for_filename
-
+from pydantic import BaseModel, ValidationError
+from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
 
 
+class UsecasesExtracted(BaseModel):
+    """Schema for output of usecase detection."""
+
+    usecases: list  # Generalized output for usecases
+
+
 class UsecaseDetectionAgent:
     def __init__(
         self,
-        detection_strategy,
         openai_client: OpenAIClient,
         log_dir=Path("logs/workflows"),
     ):
-        """
-        detection_strategy: logic or type for use case detection (could be 'LLM', 'rules', etc.)
-        openai_client: injected OpenAIClient instance
-        log_dir: workflow log storage (default: logs/workflows)
-        """
-        self.detection_strategy = detection_strategy
         self.llm = openai_client
         self.log_dir = log_dir
 
     def run(
-        self, input_path: Path, base_name: str, iteration: int, workflow_id: str = None
+        self,
+        input_data: list,
+        base_name: str,
+        iteration: int,
+        workflow_id: str = None,
+        parent_event_id: str = None,
     ):
-        """
-        Performs use case detection on the given input.
-        All events are logged to the workflow JSONL log.
-        """
         if workflow_id is None:
-            workflow_id = f"{timestamp_for_filename()}_workflow_{uuid4().hex[:6]}"
+            workflow_id = f"usecase_{uuid4().hex[:6]}"
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Read input data
-            with open(input_path, "r", encoding="utf-8") as f:
-                input_content = f.read()
+            # Prepare JSON string for LLM
+            features_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-            # --- Detect use cases (customize this logic as needed)
-            detected_usecases = self.detect_usecases(input_content)
+            usecases_json = self.extract_usecases(features_json)
+            validated = UsecasesExtracted(usecases=usecases_json)
 
             payload = {
-                "input": input_content,
-                "detected_usecases": detected_usecases,
+                "input": input_data,
+                "usecases": validated.usecases,
                 "feedback": "",
             }
 
             event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="usecase_detection",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,
@@ -75,19 +76,22 @@ class UsecaseDetectionAgent:
                 payload=payload,
                 meta={
                     "iteration": iteration,
-                    "detection_strategy": str(self.detection_strategy),
+                    "mapping_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(event)
             return event
 
-        except Exception as ex:
+        except (ValidationError, Exception) as ex:
             import traceback
 
             error_event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="error",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="1.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,
@@ -98,18 +102,21 @@ class UsecaseDetectionAgent:
                 },
                 meta={
                     "iteration": iteration,
-                    "detection_strategy": str(self.detection_strategy),
+                    "mapping_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
             )
             logger.log_event(error_event)
             raise
 
-    def detect_usecases(self, input_content):
-        """
-        Your custom use case detection logic.
-        For now, returns a dummy example. Replace with your real detection strategy!
-        """
-        # Example: use LLM, rules, keyword search, etc.
-        # usecases = self.llm.detect_usecases(input_content)
-        # return usecases
-        return ["example_usecase"]  # Placeholder
+    def extract_usecases(self, features_json: str):
+        prompt = (
+            "Given the following extracted product features as JSON, "
+            "infer and return 3 to 7 plausible usage domains (application environments, use cases) as a JSON array of strings. "
+            "Do not include explanations, only the JSON list.\n\n"
+            f"{features_json}\n"
+        )
+        response = self.llm.chat(prompt=prompt)
+        print("🧠 LLM Response (Usecase):\n", response)
+        return json.loads(response)

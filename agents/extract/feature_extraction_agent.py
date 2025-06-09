@@ -1,11 +1,14 @@
+# agents/extract/feature_extraction_agent.py
+
 """
-feature_extraction_agent.py
+Feature Extraction Agent
 
-Purpose : Extracts features from prompts or input data using LLM.
-Logging : All extraction events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
+Version: 2.1.0
+Author: Konstantin Milonas with Agentic AI Copilot support
 
-Version : 2.0.0
-Author  : Konstantin Milonas with support from AI Copilot
+Purpose:
+Extracts features from provided input data using LLM.
+Logging: All extraction events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
 """
 
 from pathlib import Path
@@ -23,7 +26,7 @@ from utils.openai_client import OpenAIClient
 class FeaturesExtracted(BaseModel):
     """Output schema for features extracted by the agent."""
 
-    example_feature: bool
+    features: list  # Accept any list structure for generalization
 
 
 class FeatureExtractionAgent:
@@ -37,7 +40,7 @@ class FeatureExtractionAgent:
 
     def run(
         self,
-        input_path: Path,
+        input_data: list,
         base_name: str,
         iteration: int,
         workflow_id: str = None,
@@ -48,23 +51,24 @@ class FeatureExtractionAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            with open(input_path, "r", encoding="utf-8") as f:
-                input_content = f.read()
+            # --- Prepare JSON string for LLM prompt
+            input_content = json.dumps(input_data, ensure_ascii=False, indent=2)
 
+            # --- LLM-based extraction
             features_json = self.extract_features(input_content)
-
-            validated = FeaturesExtracted(**features_json)
+            validated = FeaturesExtracted(features=features_json)
 
             payload = {
-                "input": input_content,
-                "features_extracted": validated.dict(),
+                "input": input_data,
+                "features_extracted": validated.features,
                 "feedback": "",
             }
 
             event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="feature_extraction",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -74,6 +78,7 @@ class FeatureExtractionAgent:
                     "iteration": iteration,
                     "extraction_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
                 source_event_id=parent_event_id,
             )
             logger.log_event(event)
@@ -83,9 +88,10 @@ class FeatureExtractionAgent:
             import traceback
 
             error_event = AgentEvent(
+                event_id=str(uuid4()),
                 event_type="error",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.0.0",
+                agent_version="2.1.0",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -98,15 +104,19 @@ class FeatureExtractionAgent:
                     "iteration": iteration,
                     "extraction_strategy": "LLM",
                 },
+                workflow_id=workflow_id,
                 source_event_id=parent_event_id,
             )
             logger.log_event(error_event)
             raise
 
-    def extract_features(self, input_content):
+    def extract_features(self, input_content: str):
         prompt = (
-            f"Extract relevant product or business features from the following input:\n\n"
-            f"{input_content}\n\nReturn a JSON object."
+            "Extract the most relevant product or business features from the following input JSON list.\n\n"
+            f"{input_content}\n\n"
+            "Return a JSON array of feature objects only (do not include any explanations)."
         )
         response = self.llm.chat(prompt=prompt)
+        print("🧠 LLM Response:\n", response)
+        # Try to parse as JSON list, or raise error
         return json.loads(response)

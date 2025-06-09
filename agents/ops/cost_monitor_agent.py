@@ -1,56 +1,104 @@
-"""
-cost_monitor_agent.py
+# agents/ops/cost_monitor_agent.py
 
-Purpose : Monitors and logs OpenAI API token/cost usage for agentic workflows.
-Version : 1.0.1
-Author  : Konstantin & AI Copilot
-Notes   :
-- Aggregates API call costs by agent and run.
-- Logs all cost events exclusively to logs/score_log/
-- Designed for integration into pipeline or as a CLI utility.
+"""
+Cost Monitor Agent
+
+Version: 2.1.0
+Author: Konstantin Milonas with Agentic AI Copilot support
+
+Purpose:
+Monitors OpenAI API usage and cost for the current workflow session.
+Logs usage and estimated cost to the workflow-centric JSONL log.
 """
 
-from typing import Dict, Any, Optional
+from pathlib import Path
 from datetime import datetime
+from uuid import uuid4
+
+from pydantic import BaseModel, ValidationError
 from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
-from utils.event_logger import write_event_log
-from pathlib import Path
+from utils.jsonl_event_logger import JsonlEventLogger
 
-LOG_DIR = Path("logs") / "score_log"
+
+class CostMonitorResult(BaseModel):
+    """Schema for cost and usage logging."""
+
+    total_tokens: int
+    estimated_cost: float
 
 
 class CostMonitorAgent:
-    def __init__(self):
-        self.agent_name = "CostMonitorAgent"
-        self.agent_version = "1.0.1"
-
-    def log_cost(
+    def __init__(
         self,
-        tokens_used: int,
-        cost_usd: float,
-        agent: str,
-        operation: str,
+        log_dir=Path("logs/workflows"),
+    ):
+        self.log_dir = log_dir
+
+    def run(
+        self,
+        total_tokens: int,
+        estimated_cost: float,
         base_name: str,
         iteration: int,
-        prompt_version: Optional[str] = None,
-        meta: Optional[Dict[str, Any]] = None,
-    ) -> AgentEvent:
-        payload = {
-            "tokens_used": tokens_used,
-            "cost_usd": cost_usd,
-            "operation": operation,
-            "agent": agent,
-        }
-        event = AgentEvent(
-            event_type="cost_monitor",
-            agent_name=self.agent_name,
-            agent_version=self.agent_version,
-            timestamp=cet_now(),
-            step_id=f"{base_name}_v{prompt_version}_it{iteration}",
-            prompt_version=prompt_version,
-            meta=meta or {},
-            payload=payload,
-        )
-        write_event_log(LOG_DIR, event)
-        return event
+        workflow_id: str = None,
+        parent_event_id: str = None,
+    ):
+        if workflow_id is None:
+            workflow_id = f"cost_{uuid4().hex[:6]}"
+        logger = JsonlEventLogger(workflow_id, self.log_dir)
+
+        try:
+            validated = CostMonitorResult(
+                total_tokens=total_tokens,
+                estimated_cost=estimated_cost,
+            )
+
+            payload = {
+                "total_tokens": validated.total_tokens,
+                "estimated_cost": validated.estimated_cost,
+            }
+
+            event = AgentEvent(
+                event_id=str(uuid4()),
+                event_type="cost_monitor",
+                agent_name="CostMonitorAgent",
+                agent_version="2.1.0",
+                timestamp=cet_now(),
+                step_id="cost_monitor",
+                prompt_version=base_name,
+                status="success",
+                payload=payload,
+                meta={
+                    "iteration": iteration,
+                },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
+            )
+            logger.log_event(event)
+            return event
+
+        except (ValidationError, Exception) as ex:
+            import traceback
+
+            error_event = AgentEvent(
+                event_id=str(uuid4()),
+                event_type="error",
+                agent_name="CostMonitorAgent",
+                agent_version="2.1.0",
+                timestamp=cet_now(),
+                step_id="cost_monitor",
+                prompt_version=base_name,
+                status="error",
+                payload={
+                    "exception": str(ex),
+                    "traceback": traceback.format_exc(),
+                },
+                meta={
+                    "iteration": iteration,
+                },
+                workflow_id=workflow_id,
+                source_event_id=parent_event_id,
+            )
+            logger.log_event(error_event)
+            raise
