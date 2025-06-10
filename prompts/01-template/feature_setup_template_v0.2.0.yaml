@@ -64,4 +64,4 @@ constraints:
   - Normalize units and format values consistently (e.g., 'V', 'mm', '°C').
   - Use lowercase for units and standardized technical abbreviations.
   - Include only factual, measurable, and specification-grade attributes.
-  - If fewer than two input fields are non-empty, return {"features": []}. Do not infer or guess missing information.
+  - "If fewer than two input fields are non-empty, return {'features': []}. Do not infer or guess missing information."

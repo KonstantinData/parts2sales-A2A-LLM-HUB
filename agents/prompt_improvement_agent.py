@@ -1,10 +1,10 @@
 """
 agents/prompt_improvement_agent.py
 
-Purpose : Improves prompts based on feedback from quality evaluations.
+Purpose : Improves prompts based on feedback from quality evaluations (per domain agent or holistic pipeline context).
 Logging : All improvement events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
 
-Version : 2.1.0
+Version : 2.2.0
 Author  : Konstantin Milonas with Agentic AI Copilot support
 """
 
@@ -36,6 +36,7 @@ class PromptImprovementAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        agent_history: list = None,  # NEU: History als Kontext für gezielte Verbesserungen
     ):
         if workflow_id is None:
             from utils.time_utils import timestamp_for_filename
@@ -44,35 +45,42 @@ class PromptImprovementAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            input_json_str = json.dumps(input_data)
+            # History als Kontext nutzbar machen (z. B. Verbesserung Step X)
+            improvement_context = ""
+            if agent_history is not None:
+                improvement_context = (
+                    "\n\nFull pipeline context/history so far (JSON):\n"
+                    + json.dumps(agent_history, indent=2)
+                )
+
+            input_json_str = json.dumps(input_data, indent=2)
             prompt = (
-                f"You are a prompt improvement engine.\n"
-                f"Based on the following prompt and feedback, create an improved prompt.\n\n"
-                f"Prompt and feedback JSON:\n{input_json_str}\n\n"
-                "Respond ONLY with the improved prompt text.\n"
-                "Do NOT include explanations or extra text."
+                f"You are a prompt improvement engine."
+                f"\nBased on the following prompt and feedback, create an improved prompt."
+                f"\nPrompt and feedback JSON:\n{input_json_str}"
+                f"{improvement_context}"
+                "\n\nRespond ONLY with the improved prompt text."
+                "\nDo NOT include explanations or extra text."
             )
             response = self.llm.chat(prompt=prompt)
             print("🧠 LLM Response:\n", response)
 
             improved_prompt_text = response.strip()
 
-            # Ensure JSON output instruction is retained. Downstream agents
-            # expect strictly formatted JSON. If the improved prompt no longer
-            # references JSON, enforce it explicitly to avoid parsing errors.
+            # Ensure JSON output instruction is retained. Downstream agents expect JSON.
             if "json" not in improved_prompt_text.lower():
                 improved_prompt_text += "\nRespond only with valid JSON."
 
-            # If the LLM answered with an apology or empty text, fall back to the
-            # original prompt. This prevents downstream agents from receiving an
-            # invalid prompt like "I'm sorry..." which would cause parsing errors.
+            # Robust fallback: No apologies, no empty, fallback to original prompt
             apology_phrases = (
                 "i'm sorry",
                 "i am sorry",
                 "sorry",
                 "es tut mir leid",
             )
-            if not improved_prompt_text or improved_prompt_text.lower().startswith(apology_phrases):
+            if not improved_prompt_text or improved_prompt_text.lower().startswith(
+                apology_phrases
+            ):
                 original_prompt = input_data.get("original_prompt", "")
                 if original_prompt:
                     improved_prompt_text = original_prompt
@@ -80,13 +88,16 @@ class PromptImprovementAgent:
             payload = {
                 "improved_prompt": improved_prompt_text,
                 "input_data": input_data,
+                "improvement_context": (
+                    agent_history if agent_history is not None else []
+                ),
             }
 
             event = AgentEvent(
                 event_id=str(uuid4()),
                 event_type="prompt_improvement",
                 agent_name="PromptImprovementAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="prompt_improvement",
                 prompt_version=base_name,
@@ -108,7 +119,7 @@ class PromptImprovementAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="PromptImprovementAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="prompt_improvement",
                 prompt_version=base_name,

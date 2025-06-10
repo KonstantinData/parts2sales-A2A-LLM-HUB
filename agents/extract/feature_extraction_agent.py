@@ -3,44 +3,39 @@
 """
 Feature Extraction Agent
 
-Version: 2.1.1
+Version: 2.3.0
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
 Extracts features from provided input data using LLM.
-Logging: All extraction events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
+Loads the extraction prompt from the correct YAML template layer and injects all
+specification and constraints to guide the LLM toward structured, specification-grade extraction.
+All extraction events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 import json
+import yaml
 
 from pydantic import BaseModel, ValidationError
 from utils.time_utils import cet_now, timestamp_for_filename
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
+from utils.list_extractor import extract_list_anywhere
 
 
 class FeaturesExtracted(BaseModel):
-    """Output schema for features extracted by the agent."""
-
-    features: list  # Accept any list structure for generalization
+    features: list
 
     @classmethod
     def from_llm_response(cls, response):
-        # Robust: Accept either a list or an object with "features" key containing a list
-        if isinstance(response, list):
-            return cls(features=response)
-        if (
-            isinstance(response, dict)
-            and "features" in response
-            and isinstance(response["features"], list)
-        ):
-            return cls(features=response["features"])
+        result = extract_list_anywhere(response, ["features", "features_extracted"])
+        if result and isinstance(result, list):
+            return cls(features=result)
         raise ValueError(
-            "LLM response must be a list or an object with a 'features' key containing a list."
+            "LLM response must contain a features list under a common key or as root list."
         )
 
 
@@ -49,9 +44,13 @@ class FeatureExtractionAgent:
         self,
         openai_client: OpenAIClient,
         log_dir=Path("logs/workflows"),
+        prompt_dir=Path("prompts/01-template"),
+        prompt_file="feature_setup_template_v0.2.0.yaml",
     ):
         self.llm = openai_client
         self.log_dir = log_dir
+        self.prompt_dir = prompt_dir
+        self.prompt_file = prompt_file
 
     def run(
         self,
@@ -67,10 +66,7 @@ class FeatureExtractionAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # --- Prepare JSON string for LLM prompt
             input_content = json.dumps(input_data, ensure_ascii=False, indent=2)
-
-            # --- LLM-based extraction
             features_json = self.extract_features(input_content, prompt_override)
             validated = FeaturesExtracted.from_llm_response(features_json)
 
@@ -84,7 +80,7 @@ class FeatureExtractionAgent:
                 event_id=str(uuid4()),
                 event_type="feature_extraction",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -107,7 +103,7 @@ class FeatureExtractionAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="FeatureExtractionAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="feature_extraction",
                 prompt_version=base_name,
@@ -127,14 +123,27 @@ class FeatureExtractionAgent:
             raise
 
     def extract_features(self, input_content: str, prompt_override: str | None = None):
-        prompt = (
-            "Extract the most relevant product or business features from the following input JSON list.\n\n"
-            f"{input_content}\n\n"
-            "Return a JSON array of feature objects only (do not include any explanations)."
+        prompt_path = self.prompt_dir / self.prompt_file
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            prompt_yaml = yaml.safe_load(f)
+
+        system_prompt = (
+            f"{prompt_yaml['role'].strip()}\n\n"
+            f"{prompt_yaml['objective'].strip()}\n"
+            f"INPUT FORMAT (each product):\n{prompt_yaml['input_format'].strip()}\n"
+            f"OUTPUT FORMAT:\n{prompt_yaml['output_format'].strip()}\n"
+            f"CONSTRAINTS:\n" + "\n".join(f"- {c}" for c in prompt_yaml["constraints"])
         )
+
+        prompt = (
+            f"{system_prompt}\n\n"
+            f"Here is the product input JSON list:\n{input_content}\n"
+            "Respond only as specified above."
+        )
+
         if prompt_override:
             prompt = prompt_override
+
         response = self.llm.chat(prompt=prompt)
         print("🧠 LLM Response:\n", response)
-        # Try to parse as JSON list or object with "features" key
         return json.loads(response)

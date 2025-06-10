@@ -1,18 +1,14 @@
-# agents/matchmaking/crm_sync_agent.py
-
 """
 CRM Sync Agent
 
-Version: 2.1.0
+Version: 2.2.0
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
-Simulates syncing of matched contacts into a CRM system.
-Logs all sync events to the workflow-centric JSONL log.
+Simulates syncing of matched contacts into a CRM system (real or mock). Logs all sync events to the workflow-centric JSONL log. Accepts pipeline input and makes output history/trace clear.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 import json
 
@@ -24,10 +20,20 @@ from utils.openai_client import OpenAIClient
 
 
 class CRMSyncResult(BaseModel):
-    """Schema for CRM sync operation result."""
-
     synced_contacts: list
     sync_status: str
+
+    @classmethod
+    def from_llm_response(cls, response):
+        if (
+            isinstance(response, dict)
+            and "synced_contacts" in response
+            and "sync_status" in response
+        ):
+            return cls(**response)
+        raise ValueError(
+            "LLM response must be a dict with 'synced_contacts' and 'sync_status'."
+        )
 
 
 class CRMSyncAgent:
@@ -46,6 +52,7 @@ class CRMSyncAgent:
         iteration: int,
         workflow_id: str = None,
         parent_event_id: str = None,
+        prompt_override: str | None = None,
     ):
         if workflow_id is None:
             workflow_id = f"crm_{uuid4().hex[:6]}"
@@ -53,9 +60,8 @@ class CRMSyncAgent:
 
         try:
             contacts_json = json.dumps(input_data, ensure_ascii=False, indent=2)
-
-            result = self.sync_contacts(contacts_json)
-            validated = CRMSyncResult(**result)
+            result = self.sync_contacts(contacts_json, prompt_override)
+            validated = CRMSyncResult.from_llm_response(result)
 
             payload = {
                 "input": input_data,
@@ -68,7 +74,7 @@ class CRMSyncAgent:
                 event_id=str(uuid4()),
                 event_type="crm_sync",
                 agent_name="CRMSyncAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="crm_sync",
                 prompt_version=base_name,
@@ -91,7 +97,7 @@ class CRMSyncAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CRMSyncAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="crm_sync",
                 prompt_version=base_name,
@@ -110,8 +116,17 @@ class CRMSyncAgent:
             logger.log_event(error_event)
             raise
 
-    def sync_contacts(self, contacts_json: str):
-        # Simulate CRM sync – in real use, integrate CRM API here.
+    def sync_contacts(self, contacts_json: str, prompt_override: str | None = None):
+        # In real use, integrate CRM API here. For now: simulate.
+        if prompt_override:
+            try:
+                response = self.llm.chat(prompt=prompt_override)
+                return json.loads(response)
+            except Exception:
+                return {
+                    "synced_contacts": [],
+                    "sync_status": "failed",
+                }
         try:
             contacts = json.loads(contacts_json)
             return {

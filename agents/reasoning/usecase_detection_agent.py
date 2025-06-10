@@ -3,7 +3,7 @@
 """
 Usecase Detection Agent
 
-Version: 2.1.1
+Version: 2.3.0
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -13,7 +13,6 @@ Logs all detections to the workflow-centric JSONL log.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 import json
 
@@ -22,24 +21,21 @@ from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
+from utils.list_extractor import extract_list_anywhere
 
 
 class UsecasesExtracted(BaseModel):
-    """Schema for output of usecase detection."""
-
-    usecases: list  # Generalized output for usecases
+    usecases: list
 
     @classmethod
     def from_llm_response(cls, response):
-        if isinstance(response, list):
-            return cls(usecases=response)
-        if isinstance(response, dict):
-            # akzeptiere auch usage_domains oder usecases als Schlüssel
-            for key in ("usage_domains", "usecases"):
-                if key in response and isinstance(response[key], list):
-                    return cls(usecases=response[key])
+        result = extract_list_anywhere(
+            response, ["usecases", "usage_domains", "application_domains"]
+        )
+        if result and isinstance(result, list):
+            return cls(usecases=result)
         raise ValueError(
-            "LLM response must be a list or an object with 'usecases' or 'usage_domains' key containing a list."
+            "LLM response must contain a usecase list under a common key or as root list."
         )
 
 
@@ -66,7 +62,6 @@ class UsecaseDetectionAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            # Prepare JSON string for LLM
             features_json = json.dumps(input_data, ensure_ascii=False, indent=2)
             usecases_json = self.extract_usecases(features_json, prompt_override)
             validated = UsecasesExtracted.from_llm_response(usecases_json)
@@ -81,7 +76,7 @@ class UsecaseDetectionAgent:
                 event_id=str(uuid4()),
                 event_type="usecase_detection",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,
@@ -104,7 +99,7 @@ class UsecaseDetectionAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="UsecaseDetectionAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="usecase_detection",
                 prompt_version=base_name,
@@ -125,9 +120,9 @@ class UsecaseDetectionAgent:
 
     def extract_usecases(self, features_json: str, prompt_override: str | None = None):
         prompt = (
-            "Given the following extracted product features as JSON, "
-            "infer and return 3 to 7 plausible usage domains (application environments, use cases) as a JSON array of strings. "
-            "Do not include explanations, only the JSON list.\n\n"
+            "Given the following list of products (with features), infer and return for each product a list of plausible usage domains (application environments, use cases) as a JSON array.\n"
+            "Return a JSON array or a dict with a key like 'usecases'.\n"
+            "Respond ONLY with the JSON, no explanations or comments.\n\n"
             f"{features_json}\n"
         )
         if prompt_override:

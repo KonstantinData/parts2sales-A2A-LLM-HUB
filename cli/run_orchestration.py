@@ -39,7 +39,7 @@ def main():
         workflow_id=workflow_id,
         sample_file=sample_file,
         log_dir=log_dir,
-        prompt_dir=prompt_dir,  # <--- NEU
+        prompt_dir=prompt_dir,
     )
     final_event = orchestrator.run(
         base_name=base_name,

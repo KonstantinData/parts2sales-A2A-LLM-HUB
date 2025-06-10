@@ -3,7 +3,7 @@
 """
 Industry Classification Agent
 
-Version: 2.1.1
+Version: 2.3.0
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
@@ -13,7 +13,6 @@ Logs all events to workflow-centric JSONL log.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 import json
 
@@ -22,25 +21,21 @@ from utils.time_utils import cet_now
 from utils.schemas import AgentEvent
 from utils.jsonl_event_logger import JsonlEventLogger
 from utils.openai_client import OpenAIClient
-from utils.json_safety import extract_json_array_from_response
+from utils.list_extractor import extract_list_anywhere
 
 
 class IndustriesExtracted(BaseModel):
-    """Schema for output of industry classification."""
-
-    industries: list  # Generalized output for industry labels/classes
+    industries: list
 
     @classmethod
     def from_llm_response(cls, response):
-        if isinstance(response, list):
-            return cls(industries=response)
-        if isinstance(response, dict):
-            # Akzeptiere auch keys wie "industries", "industry_classes", "labels"
-            for key in ("industries", "industry_classes", "labels"):
-                if key in response and isinstance(response[key], list):
-                    return cls(industries=response[key])
+        result = extract_list_anywhere(
+            response, ["industries", "industry_classes", "labels"]
+        )
+        if result and isinstance(result, list):
+            return cls(industries=result)
         raise ValueError(
-            "LLM response must be a list or an object with a key containing a list of industries."
+            "LLM response must contain an industries list under a common key or as root list."
         )
 
 
@@ -81,7 +76,7 @@ class IndustryClassAgent:
                 event_id=str(uuid4()),
                 event_type="industry_classification",
                 agent_name="IndustryClassAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="industry_classification",
                 prompt_version=base_name,
@@ -104,7 +99,7 @@ class IndustryClassAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="IndustryClassAgent",
-                agent_version="2.1.1",
+                agent_version="2.3.0",
                 timestamp=cet_now(),
                 step_id="industry_classification",
                 prompt_version=base_name,
@@ -127,8 +122,8 @@ class IndustryClassAgent:
         self, usecases_json: str, prompt_override: str | None = None
     ):
         prompt = (
-            "Given the following JSON array of use cases, assign and return relevant industry classes (e.g. NAICS, NACE, or text labels) "
-            "as a JSON array of strings. Return only the JSON array, no explanations.\n\n"
+            "Given the following JSON array of use cases, assign and return relevant industry classes (e.g. NAICS, NACE, or text labels) as a JSON array or dict.\n"
+            "Respond ONLY with the JSON array or a dict, no explanations or comments.\n\n"
             f"{usecases_json}\n"
         )
         if prompt_override:

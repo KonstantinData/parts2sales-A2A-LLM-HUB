@@ -1,18 +1,14 @@
-# agents/ops/cost_monitor_agent.py
-
 """
 Cost Monitor Agent
 
-Version: 2.1.0
+Version: 2.2.0
 Author: Konstantin Milonas with Agentic AI Copilot support
 
 Purpose:
-Monitors OpenAI API usage and cost for the current workflow session.
-Logs usage and estimated cost to the workflow-centric JSONL log.
+Monitors OpenAI API usage and cost for the current workflow session. Logs usage and estimated cost to the workflow-centric JSONL log, including session traceability and meta information.
 """
 
 from pathlib import Path
-from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -22,8 +18,6 @@ from utils.jsonl_event_logger import JsonlEventLogger
 
 
 class CostMonitorResult(BaseModel):
-    """Schema for cost and usage logging."""
-
     total_tokens: int
     estimated_cost: float
 
@@ -63,7 +57,7 @@ class CostMonitorAgent:
                 event_id=str(uuid4()),
                 event_type="cost_monitor",
                 agent_name="CostMonitorAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="cost_monitor",
                 prompt_version=base_name,
@@ -85,7 +79,7 @@ class CostMonitorAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="CostMonitorAgent",
-                agent_version="2.1.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="cost_monitor",
                 prompt_version=base_name,

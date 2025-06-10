@@ -1,10 +1,10 @@
 """
 agents/prompt_quality_agent.py
 
-Purpose : Evaluates prompt quality based on extracted features and domain agent outputs.
+Purpose : Evaluates prompt quality holistically based on the current and all previous domain agent outputs.
 Logging : All evaluation events (success and error) are appended to a workflow-centric JSONL log using JsonlEventLogger.
 
-Version : 2.1.0
+Version : 2.2.0
 Author  : Konstantin Milonas with Agentic AI Copilot support
 """
 
@@ -26,6 +26,9 @@ class QualityEvaluation(BaseModel):
     score: float
     passed: bool
     feedback: str
+    suggest_improvement_for: str | None = (
+        None  # Name des vorherigen Agents, falls Rücksprung empfohlen
+    )
 
 
 class PromptQualityAgent:
@@ -39,9 +42,10 @@ class PromptQualityAgent:
 
     def run(
         self,
-        input_data,
-        base_name: str,
-        iteration: int,
+        input_data,  # Aktueller Agent-Output (z.B. das Step-Output als dict)
+        agent_history=None,  # Liste aller bisherigen Agentenoutputs (optional, als Kontext für holistische Bewertung)
+        base_name: str = "",
+        iteration: int = 1,
         workflow_id: str = None,
         parent_event_id: str = None,
     ):
@@ -52,12 +56,26 @@ class PromptQualityAgent:
         logger = JsonlEventLogger(workflow_id, self.log_dir)
 
         try:
-            input_json_str = json.dumps(input_data)
+            input_json_str = json.dumps(input_data, ensure_ascii=False, indent=2)
+            history_json_str = (
+                json.dumps(agent_history, ensure_ascii=False, indent=2)
+                if agent_history
+                else "[]"
+            )
+
+            # Holistischer Bewertungs-Prompt:
             prompt = (
-                f"Evaluate the quality of the following prompt output (JSON):\n\n"
-                f"{input_json_str}\n\n"
-                "Return a JSON object with fields: score (0.0-1.0), passed (bool), feedback (string).\n"
-                "Respond ONLY with the JSON, no explanations."
+                "You are an autonomous prompt quality reviewer for a multi-step AI workflow.\n"
+                "Evaluate not only the current agent output, but also the combined sequence of all previous outputs and their feedback.\n"
+                "Your decision criteria:\n"
+                "- Should the workflow continue? Did all steps so far deliver sufficient quality *in combination*?\n"
+                "- If you PASS, always provide at least one concrete improvement suggestion for the pipeline.\n"
+                "- If you FAIL, state which prior step/agent should be improved and why.\n"
+                "- Never refer to hard thresholds or fixed rules; always decide dynamically.\n"
+                "- Output must be a valid JSON object with: score (0.0–1.0), passed (bool), feedback (string), and suggest_improvement_for (string|null).\n\n"
+                f"Workflow history (all previous agent outputs):\n{history_json_str}\n\n"
+                f"Current agent output to review:\n{input_json_str}\n"
+                "Respond ONLY with the JSON object. No explanations or comments."
             )
             response = self.llm.chat(prompt=prompt)
             print("🧠 LLM Response:\n", response)
@@ -74,13 +92,14 @@ class PromptQualityAgent:
             payload = {
                 "evaluation": validated.dict(),
                 "input_data": input_data,
+                "agent_history": agent_history,
             }
 
             event = AgentEvent(
                 event_id=str(uuid4()),
                 event_type="prompt_quality_evaluation",
                 agent_name="PromptQualityAgent",
-                agent_version="2.0.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="prompt_quality_evaluation",
                 prompt_version=base_name,
@@ -102,7 +121,7 @@ class PromptQualityAgent:
                 event_id=str(uuid4()),
                 event_type="error",
                 agent_name="PromptQualityAgent",
-                agent_version="2.0.0",
+                agent_version="2.2.0",
                 timestamp=cet_now(),
                 step_id="prompt_quality_evaluation",
                 prompt_version=base_name,
